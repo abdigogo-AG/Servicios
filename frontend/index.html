@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Servicios para el Hogar</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    
+    <link rel="stylesheet" href="/frontend/css/style.css">
+</head>
+<body>
+
+    <div class="page-container">
+        
+        <nav class="sidebar">
+            <div class="search-bar">
+                <i class="fas fa-search"></i>
+                <input type="text" placeholder="BUSCAR">
+            </div>
+            
+            <ul class="nav-menu">
+                <li>
+                    <a href="/frontend/index.html" class="active">
+                        <i class="fas fa-home"></i>
+                        INICIO
+                    </a>
+                </li>
+                <li>
+                    <a href="servicio-tecnico.html">
+                        <i class="fas fa-tools"></i>
+                        SERVICIO TECNICO
+                    </a>
+                </li>
+                
+                <li class="nav-dropdown">
+                    <a href="#" class="nav-dropdown-toggle">
+                        <i class="fas fa-th-large"></i>
+                        CATEGORIAS
+                        <i class="fas fa-chevron-down dropdown-arrow"></i>
+                    </a>
+                    
+                    <ul class="nav-submenu">
+                        <li>
+                            <a href="electricistas.html">
+                                <i class="fas fa-bolt"></i>
+                                Electricista
+                            </a>
+                        </li>
+                        <li>
+                            <a href="plomeros.html">
+                                <i class="fas fa-wrench"></i>
+                                Plomero
+                            </a>
+                        </li>
+                        <li>
+                            <a href="carpinteros.html">
+                                <i class="fas fa-hammer"></i>
+                                Carpintero
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <li>
+                    <a href="mis-pedidos.html">
+                        <i class="fas fa-clipboard-list"></i>
+                        MIS SOLICITUDES
+                    </a>
+                </li>
+                <li>
+                    <a href="/frontend/registro.html">
+                        <i class="fas fa-user-plus"></i>
+                        REGISTRO
+                    </a>
+                </li>
+                <li>
+                    <a href="perfil.html">
+                        <i class="fas fa-user"></i>
+                        PERFIL DE USUARIO
+                    </a>
+                </li>
+            </ul>
+        </nav>
+        
+        <div class="main-wrapper">
+            
+            <header class="main-header">
+                <a href="/frontend/login.html" class="login-link">
+                    <i class="fas fa-user-circle"></i>
+                    INICIO DE SESIÓN
+                </a>
+            </header>
+            
+            <main class="main-content">
+                
+                <section class="intro-section">
+                    <h2><i class="fas fa-question-circle"></i>¿COMO FUNCIONAMOS?</h2>
+                    <p>Revisamos tu problema, lo entendemos y brindamos tecnicos especialistas. Buscamos brindarte servicios basicos para tu hogar con confianza, calidad y seguridad</p>
+                </section>
+                
+                <section class="services-section">
+                    <h3>SERVICIOS BASICOS</h3>
+                    
+                    <div class="services-grid">
+                        
+                        <a href="carpinteros.html" class="service-card" style="text-decoration: none; color: inherit;">
+                            <img src="images/carpinteria.jpg" alt="Herramientas de carpintería">
+                            <div class="service-card-content">
+                                <h4><i class="fas fa-hammer"></i> CARPINTERIA</h4>
+                            </div>
+                        </a>
+                        
+                        <a href="plomeros.html" class="service-card" style="text-decoration: none; color: inherit;">
+                            <img src="images/plomeria.jpg" alt="Herramientas de plomería">
+                            <div class="service-card-content">
+                                <h4><i class="fas fa-wrench"></i> PLOMERIA</h4>
+                            </div>
+                        </a>
+                        
+                        <a href="electricistas.html" class="service-card" style="text-decoration: none; color: inherit;">
+                            <img src="images/electricista.jpg" alt="Electricista trabajando">
+                            <div class="service-card-content">
+                                <h4><i class="fas fa-bolt"></i> ELECTRICISTA</h4>
+                            </div>
+                        </a>
+                        
+                    </div>
+                </section>
+                
+                <section class="bottom-content">
+                    
+                    <div class="more-services">
+                        <h4>CONSEJOS</h4>
+                        <div class="more-services-list">
+                            
+                            <article class="accordion-item">
+                                <div class="accordion-header">
+                                    <div class="icon-wrapper"><i class="fas fa-fire-extinguisher"></i></div>
+                                    <div class="header-text">
+                                        <span>¿FUGA DE GAS EN CASA?</span>
+                                        <i class="fas fa-chevron-down arrow"></i>
+                                    </div>
+                                </div>
+                                <div class="accordion-content">
+                                    <p><strong>5 señales para detectar si necesitas un plomero:</strong></p>
+                                    <ul>
+                                        <li>Olor a huevo podrido (mercaptano).</li>
+                                        <li>Un silbido cerca de las tuberías de gas.</li>
+                                        <li>Aumento injustificado en tu factura.</li>
+                                        <li>Plantas muertas cerca de las tuberías.</li>
+                                        <li>Malestar físico (mareos o náuseas).</li>
+                                    </ul>
+                                </div>
+                            </article>
+
+                            <article class="accordion-item">
+                                <div class="accordion-header">
+                                    <div class="icon-wrapper"><i class="fas fa-lightbulb"></i></div>
+                                    <div class="header-text">
+                                        <span>¿LUZ QUE PARPADEA?</span>
+                                        <i class="fas fa-chevron-down arrow"></i>
+                                    </div>
+                                </div>
+                                <div class="accordion-content">
+                                    <p><strong>3 razones para no ignorar este problema:</strong></p>
+                                    <ul>
+                                        <li>Podría ser un cable suelto causando un arco eléctrico.</li>
+                                        <li>El circuito podría estar sobrecargado.</li>
+                                        <li>El foco o la lámpara podrían estar defectuosos.</li>
+                                    </ul>
+                                </div>
+                            </article>
+
+                            <article class="accordion-item">
+                                <div class="accordion-header">
+                                    <div class="icon-wrapper"><i class="fas fa-shower"></i></div>
+                                    <div class="header-text">
+                                        <span>¿SIN AGUA CALIENTE?</span>
+                                        <i class="fas fa-chevron-down arrow"></i>
+                                    </div>
+                                </div>
+                                <div class="accordion-content">
+                                    <p><strong>Posibles causas:</strong></p>
+                                    <p>Si es boiler de gas, revisa el piloto. Si es eléctrico, revisa el termostato o la resistencia. Si el problema persiste, es hora de llamar a un técnico.</p>
+                                </div>
+                            </article>
+
+                        </div>
+                    </div>
+                    
+                    <div class="reviews">
+                        <h4>RESEÑAS</h4>
+                        <article class="review-item">
+                            <p>"Trabajo impecable. El electricista resolvió el problema de la luz en mi cocina en poco tiempo. Súper eficiente y me sentí segura con su trabajo."</p>
+                            <div class="author">--- Ana</div>
+                        </article>
+                        <article class="review-item">
+                            <p>"Quedé encantado con el resultado. El carpintero arregló mi mueble con gran atención al detalle. El acabado es perfecto. ¡Totalmente recomendado!"</p>
+                            <div class="author">--- Juan</div>
+                        </article>
+                    </div>
+                    
+                </section>
+                
+            </main>
+        </div>
+        
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

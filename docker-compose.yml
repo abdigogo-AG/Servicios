@@ -1,0 +1,64 @@
+# version: '3.8'
+
+services:
+
+  db_postgres:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: app_user
+      POSTGRES_PASSWORD: "un_password_de_app_seguro"
+      POSTGRES_DB: registros
+    volumes:
+    - postgres_data:/var/lib/postgresql/data
+    - ./postgres_scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+    - "5432:5432"
+    networks:
+    - services_net
+
+  db_mongo:
+    image: mongo:7.0
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin_mongo
+      MONGO_INITDB_ROOT_PASSWORD: "un_password_seguro_para_mongo"
+    volumes:
+      - mongo_data:/data/db
+      - ./mongo_scripts/init.js:/docker-entrypoint-initdb.d/init.js
+    ports:
+    - "27017:27017"
+    networks:
+    - services_net
+
+
+# --- Servicio 3: API de Python (NUEVO) ---
+  api:
+    build:
+      context: . # Busca el Dockerfile en la carpeta actual ('.')
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      # Expone el puerto 8080 de su API a su máquina
+      - "8080:8080"
+    environment:
+      # Pasa las URLs de conexión a la API
+      POSTGRES_URL: "postgresql://app_user:un_password_de_app_seguro@db_postgres:5432/registros"
+      MONGO_URL: "mongodb://admin_mongo:un_password_seguro_para_mongo@db_mongo:27017/"
+    depends_on:
+      - db_postgres # Asegura que Postgres inicie primero
+      - db_mongo    # Asegura que Mongo inicie primero
+    networks:
+      - services_net # Conecta la API a la misma red
+
+
+
+
+
+volumes:
+  postgres_data:
+  mongo_data:
+
+networks:
+  services_net:
+    driver: bridge

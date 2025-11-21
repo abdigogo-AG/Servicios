@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro - Servicios del Hogar</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <!-- LEAFLET CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="/frontend/css/login.css">
+    <style>
+        #mapa-contenedor {
+            height: 300px;
+            width: 100%;
+            margin-top: 10px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            border: 2px solid #ddd;
+            z-index: 1;
+            cursor: crosshair;
+        }
+        /* Estilo para campos bloqueados (Solo lectura) */
+        .input-readonly {
+            background-color: #e9ecef !important; /* Gris claro */
+            color: #495057;
+            cursor: not-allowed;
+        }
+        /* Estilo para cuando desbloqueamos la colonia */
+        .input-unlocked {
+            background-color: #fff !important;
+            border-color: #28a745 !important; /* Borde verde para indicar que puede escribir */
+            cursor: text;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="login-container">
+        
+        <div id="step-selection" class="login-box">
+            <h2>¿Cómo deseas registrarte?</h2>
+            <p style="color: #666; margin-bottom: 20px;">Selecciona tu tipo de cuenta:</p>
+            
+            <div class="role-options">
+                <div class="role-card" onclick="selectRole('cliente')">
+                    <div class="icon-bg"><i class="fas fa-user"></i></div>
+                    <h3>Cliente</h3>
+                    <p>Busco contratar</p>
+                </div>
+                <div class="role-card" onclick="alert('Próximamente')">
+                    <div class="icon-bg"><i class="fas fa-hard-hat"></i></div>
+                    <h3>Trabajador</h3>
+                    <p>Ofrecer servicios</p>
+                </div>
+                <div class="role-card" onclick="alert('Acceso restringido')">
+                    <div class="icon-bg"><i class="fas fa-shield-alt"></i></div>
+                    <h3>Admin</h3>
+                    <p>Gestión</p>
+                </div>
+            </div>
+        </div>
+
+        <form id="step-form" class="login-box hidden"> 
+            <div class="back-arrow" onclick="goBack()">
+                <i class="fas fa-arrow-left"></i> Volver
+            </div>
+
+            <h2 id="form-title">Crear Cuenta</h2>
+            <input type="hidden" id="rol-input" name="rol" value="cliente">
+            
+            <!-- CAMPOS OCULTOS PARA LA TACHUELA (GPS) -->
+            <input type="hidden" id="latitud" name="latitud">
+            <input type="hidden" id="longitud" name="longitud">
+
+            <!-- DATOS GENERALES -->
+            <div style="display: flex; gap: 10px;">
+                <div class="input-group" style="flex: 1;">
+                    <label>Nombre(s)</label>
+                    <input type="text" id="nombre" required>
+                </div>
+                <div class="input-group" style="flex: 1;">
+                    <label>Apellidos</label>
+                    <input type="text" id="apellidos" required>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label>Correo Electrónico</label>
+                <input type="email" id="correo_electronico" placeholder="nombre@ejemplo.com" required>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <div class="input-group" style="flex: 1;">
+                    <label>Teléfono</label>
+                    <input type="tel" id="telefono" placeholder="10 dígitos" pattern="[0-9]{10}" required>
+                </div>
+                <div class="input-group" style="flex: 1;">
+                    <label>Fecha Nacimiento</label>
+                    <input type="date" id="fecha_nacimiento" required>
+                </div>
+            </div>
+
+            <!-- SECCIÓN CLIENTE -->
+            <div id="campos-cliente">
+                <div class="section-divider"></div>
+                <span class="section-title"><i class="fas fa-map-marker-alt"></i> Ubicación del Servicio</span>
+                
+                <button type="button" class="geolocation-btn" onclick="initMapWithGPS()">
+                    <i class="fas fa-crosshairs"></i> Usar mi ubicación (GPS)
+                </button>
+                <small id="status-cliente" style="display:block; margin:5px 0 10px; color:#666;">
+                    Si la dirección no coincide, <b>mueve el pin</b> en el mapa.
+                </small>
+
+                <!-- MAPA -->
+                <div id="mapa-contenedor"></div>
+
+                <div class="input-group">
+                    <label>Calle (Automático)</label>
+                    <input type="text" id="calle" class="client-field input-readonly" readonly placeholder="Mueve el pin para llenar...">
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <div class="input-group" style="flex: 1;">
+                        <label>No. Ext.</label>
+                        <input type="text" id="numero_exterior" class="client-field" placeholder="#">
+                    </div>
+                    <div class="input-group" style="flex: 1;">
+                        <label>No. Int.</label>
+                        <input type="text" id="numero_interior" placeholder="(Opcional)">
+                    </div>
+                </div>
+                
+                <!-- COLONIA INTELIGENTE (Se desbloquea si falla el mapa) -->
+                <div class="input-group">
+                    <label>Colonia</label>
+                    <input type="text" id="colonia" class="client-field input-readonly" readonly placeholder="Se llena con el mapa..." required>
+                </div>
+                
+                <div style="display: flex; gap: 10px;">
+                    <div class="input-group" style="flex: 1;">
+                        <label>C.P.</label>
+                        <input type="text" id="codigo_postal" class="client-field input-readonly" readonly>
+                    </div>
+                    <div class="input-group" style="flex: 1;">
+                        <label>Ciudad</label>
+                        <input type="text" id="ciudad" class="client-field input-readonly" readonly>
+                    </div>
+                </div>
+                
+                <div class="input-group" style="margin-top: 15px;">
+                    <label for="referencias_domicilio">Referencias del Domicilio</label>
+                    <textarea id="referencias_domicilio" placeholder="Entre calles, color de casa..." rows="2"></textarea>
+                </div>
+            </div>
+
+            <div class="section-divider"></div>
+
+            <div class="input-group">
+                <label>Contraseña</label>
+                <input type="password" id="password" required>
+            </div>
+
+            <div class="input-group">
+                <label>Confirmar</label>
+                <input type="password" id="password-confirm" required>
+            </div>
+            
+            <button type="submit" class="login-button">Registrarse</button>
+        </form>
+    </div>
+
+    <!-- LEAFLET JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        let map = null; let marker = null;
+
+        // --- 1. INTERFAZ ---
+        function selectRole(role) {
+            if (role !== 'cliente') return;
+
+            document.getElementById('step-selection').classList.add('hidden');
+            document.getElementById('step-form').classList.remove('hidden');
+            document.getElementById('rol-input').value = role;
+            
+            setTimeout(() => { 
+                if (map) map.invalidateSize(); 
+                else initMapDefault(); 
+            }, 200);
+        }
+
+        function goBack() {
+            document.getElementById('step-form').classList.add('hidden');
+            document.getElementById('step-selection').classList.remove('hidden');
+        }
+
+        // --- 2. VALIDACIÓN EDAD ---
+        function validarEdad() {
+            const fechaInput = document.getElementById('fecha_nacimiento').value;
+            if (!fechaInput) return false;
+            const edad = new Date().getFullYear() - new Date(fechaInput).getFullYear();
+            if (edad < 18) { alert("⛔ Debes ser mayor de 18 años."); return false; }
+            return true;
+        }
+        document.getElementById('fecha_nacimiento').addEventListener('change', validarEdad);
+
+        // --- 3. MAPA Y DIRECCIÓN INTELIGENTE ---
+
+        function setMarker(lat, lon) {
+            if (marker) marker.setLatLng([lat, lon]);
+            else {
+                marker = L.marker([lat, lon], {draggable: true}).addTo(map);
+                marker.on('dragend', (e) => updatePos(e.target.getLatLng()));
+            }
+            map.setView([lat, lon], 16);
+            updatePos({lat, lng: lon});
+        }
+
+        function updatePos(pos) {
+            document.getElementById('latitud').value = pos.lat;
+            document.getElementById('longitud').value = pos.lng;
+            obtenerDireccion(pos.lat, pos.lng);
+        }
+
+        function initMapDefault() {
+            if (map) return;
+            // CDMX por defecto
+            const defaultLat = 19.4326;
+            const defaultLon = -99.1332;
+            
+            map = L.map('mapa-contenedor').setView([defaultLat, defaultLon], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+            
+            setMarker(defaultLat, defaultLon);
+            document.getElementById('status-cliente').innerText = "Arrastra el pin a tu ubicación exacta.";
+
+            map.on('click', (e) => setMarker(e.latlng.lat, e.latlng.lng));
+        }
+
+        function initMapWithGPS() {
+            if (!navigator.geolocation) return alert("GPS no soportado.");
+            
+            navigator.geolocation.getCurrentPosition(
+                (pos) => { 
+                    if(!map) initMapDefault(); 
+                    setMarker(pos.coords.latitude, pos.coords.longitude); 
+                    document.getElementById('status-cliente').innerText = "Ubicación encontrada. Si falta la Colonia, escríbela.";
+                    document.getElementById('status-cliente').style.color = "green";
+                },
+                () => { 
+                    alert("Permiso denegado. Usa el mapa manualmente."); 
+                    if(!map) initMapDefault(); 
+                },
+                { enableHighAccuracy: true }
+            );
+        }
+
+        async function obtenerDireccion(lat, lon) {
+            try {
+                document.getElementById('calle').value = "Cargando...";
+                
+                const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`;
+                const response = await fetch(url, { headers: { 'User-Agent': 'TuAppServicios/1.0' } });
+                const data = await response.json();
+                const dir = data.address;
+
+                // 1. CALLE (Estricto)
+                document.getElementById('calle').value = dir.road || dir.pedestrian || dir.path || "Calle sin nombre";
+                
+                // 2. COLONIA (Lógica mejorada + Desbloqueo)
+                const coloniaEncontrada = 
+                    dir.neighbourhood || 
+                    dir.suburb || 
+                    dir.quarter || 
+                    dir.city_district || 
+                    dir.residential || 
+                    dir.hamlet || 
+                    dir.village ||
+                    "";
+
+                const inputColonia = document.getElementById('colonia');
+
+                if (coloniaEncontrada) {
+                    // Si la encontramos, la ponemos y BLOQUEAMOS
+                    inputColonia.value = coloniaEncontrada;
+                    inputColonia.classList.add('input-readonly');
+                    inputColonia.classList.remove('input-unlocked');
+                    inputColonia.readOnly = true;
+                } else {
+                    // Si NO la encontramos, DESBLOQUEAMOS para que el usuario escriba
+                    inputColonia.value = "";
+                    inputColonia.placeholder = "No detectada. Escríbela aquí...";
+                    inputColonia.classList.remove('input-readonly');
+                    inputColonia.classList.add('input-unlocked');
+                    inputColonia.readOnly = false;
+                }
+
+                // 3. OTROS DATOS
+                document.getElementById('codigo_postal').value = dir.postcode || "";
+                document.getElementById('ciudad').value = dir.city || dir.town || dir.municipality || dir.county || "";
+                
+                if(dir.house_number) {
+                    document.getElementById('numero_exterior').value = dir.house_number;
+                }
+
+            } catch(e) {
+                console.error("Error geocoding:", e);
+                document.getElementById('calle').value = "Error al obtener dirección";
+                // Si falla la red, desbloqueamos la colonia por si acaso
+                document.getElementById('colonia').readOnly = false;
+            }
+        }
+
+        // --- 4. ENVÍO DE FORMULARIO ---
+        document.getElementById('step-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!validarEdad()) return;
+
+            const lat = document.getElementById('latitud').value;
+            if (!lat) {
+                alert("⚠️ Por favor usa el mapa para establecer tu ubicación.");
+                return;
+            }
+
+            const password = document.getElementById('password').value;
+            const confirm = document.getElementById('password-confirm').value;
+            if (password !== confirm) { alert("Las contraseñas no coinciden"); return; }
+
+            const datosParaPython = {
+                nombre: document.getElementById('nombre').value,
+                apellidos: document.getElementById('apellidos').value,
+                correo_electronico: document.getElementById('correo_electronico').value,
+                password: password,
+                telefono: document.getElementById('telefono').value,
+                fecha_nacimiento: document.getElementById('fecha_nacimiento').value,
+                calle: document.getElementById('calle').value,
+                colonia: document.getElementById('colonia').value,
+                numero_exterior: document.getElementById('numero_exterior').value,
+                numero_interior: document.getElementById('numero_interior').value || null,
+                codigo_postal: document.getElementById('codigo_postal').value,
+                ciudad: document.getElementById('ciudad').value,
+                referencias: document.getElementById('referencias_domicilio').value || null,
+                latitud: document.getElementById('latitud').value,
+                longitud: document.getElementById('longitud').value
+            };
+
+            try {
+                const respuesta = await fetch("http://localhost:8080/registro-cliente", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(datosParaPython)
+                });
+                const resultado = await respuesta.json();
+                
+                if (respuesta.ok) {
+                    alert("¡ÉXITO! " + resultado.mensaje);
+                    window.location.href = "verificar.html"; 
+                } else {
+                    alert("Error: " + (resultado.detail || "Error desconocido"));
+                }
+            } catch (error) {
+                console.error(error);
+                alert("No se pudo conectar con el servidor.");
+            }
+        });
+    </script>
+</body>
+</html>
