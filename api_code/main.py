@@ -7,6 +7,7 @@ import psycopg2
 import psycopg2.extras
 import bcrypt
 import re
+import mercadopago
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.staticfiles import StaticFiles 
 from contextlib import asynccontextmanager
@@ -21,6 +22,23 @@ from fastapi.middleware.cors import CORSMiddleware
 log = logging.getLogger("uvicorn")
 POSTGRES_URL = os.environ.get("POSTGRES_URL")
 db_connections = {}
+
+# Leer Token
+mp_token = os.environ.get("MP_ACCESS_TOKEN")
+
+# Verificación de Seguridad
+if not mp_token:
+    print("\n⚠️  ADVERTENCIA: No se encontró MP_ACCESS_TOKEN en las variables de entorno.")
+    print("⚠️  La API arrancará, pero los pagos fallarán.\n")
+    sdk = None # Evita que explote al inicio
+else:
+    try:
+        sdk = mercadopago.SDK(mp_token)
+        print("✅ Mercado Pago SDK inicializado correctamente.")
+    except Exception as e:
+        print(f"❌ Error al iniciar Mercado Pago: {e}")
+        sdk = None
+
 
 UPLOAD_DIR = "uploads"
 if not os.path.exists(UPLOAD_DIR):
@@ -48,6 +66,14 @@ class RegistroCliente(BaseModel):
     latitud: Optional[float] = None
     longitud: Optional[float] = None
 
+    # Modelo de datos que recibimos del frontend
+class SolicitudPago(BaseModel):
+    servicio_id: str
+    titulo: str
+    precio: float
+    trabajador_id: str
+    propuesta_id: str
+
 class RegistroTrabajador(BaseModel):
     nombre: str
     apellidos: str
@@ -71,13 +97,16 @@ class LoginRequest(BaseModel):
     password: str
 
 # --- PERFILES ---
+# --- MODELO LIMPIO (Sin dirección) ---
 class PerfilTrabajadorUpdate(BaseModel):
     nombre: str
     apellidos: str
     telefono: str
+    # Datos Profesionales
     descripcion_bio: str
     anios_experiencia: int
     tarifa_hora: float
+    # Docs y Fotos
     foto_perfil_url: Optional[str] = None
     foto_ine_frente_url: Optional[str] = None
     foto_ine_reverso_url: Optional[str] = None
@@ -227,7 +256,7 @@ def registrar_cliente(datos: RegistroCliente):
         with conn.cursor() as cursor:
             hashed_pass = encriptar_password(datos.password)
             codigo = generar_codigo_verificacion()
-            cursor.execute("INSERT INTO usuarios (nombre, apellidos, correo_electronico, password_hash, telefono, fecha_nacimiento, activo, codigo_verificacion) VALUES (%s, %s, %s, %s, %s, %s, FALSE, %s) RETURNING id", (datos.nombre, datos.apellidos, datos.correo_electronico, hashed_pass, datos.telefono, datos.fecha_nacimiento, codigo))
+            cursor.execute("INSERT INTO usuarios (nombre, apellidos, correo_electronico, password_hash, telefono, fecha_nacimiento, activo, codigo_verificacion) VALUES (%s, %s, %s, %s, %s, %s, TRUE, %s) RETURNING id", (datos.nombre, datos.apellidos, datos.correo_electronico, hashed_pass, datos.telefono, datos.fecha_nacimiento, codigo))
             nuevo_id = cursor.fetchone()['id']
             cursor.execute("INSERT INTO detalles_cliente (usuario_id, calle, colonia, numero_exterior, numero_interior, codigo_postal, ciudad, referencias_domicilio, latitud, longitud) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (nuevo_id, datos.calle, datos.colonia, datos.numero_exterior, datos.numero_interior, datos.codigo_postal, datos.ciudad, datos.referencias, datos.latitud, datos.longitud))
             conn.commit()
@@ -244,7 +273,7 @@ def registrar_trabajador(datos: RegistroTrabajador):
         with conn.cursor() as cursor:
             hashed_pass = encriptar_password(datos.password)
             codigo = generar_codigo_verificacion()
-            cursor.execute("INSERT INTO usuarios (nombre, apellidos, correo_electronico, password_hash, telefono, fecha_nacimiento, activo, codigo_verificacion) VALUES (%s, %s, %s, %s, %s, %s, FALSE, %s) RETURNING id", (datos.nombre, datos.apellidos, datos.correo_electronico, hashed_pass, datos.telefono, datos.fecha_nacimiento, codigo))
+            cursor.execute("INSERT INTO usuarios (nombre, apellidos, correo_electronico, password_hash, telefono, fecha_nacimiento, activo, codigo_verificacion) VALUES (%s, %s, %s, %s, %s, %s, TRUE, %s) RETURNING id", (datos.nombre, datos.apellidos, datos.correo_electronico, hashed_pass, datos.telefono, datos.fecha_nacimiento, codigo))
             nuevo_id = cursor.fetchone()['id']
             cursor.execute("INSERT INTO detalles_trabajador (usuario_id, descripcion_bio, anios_experiencia, tarifa_hora_estimada, latitud, longitud) VALUES (%s, %s, %s, %s, %s, %s)", (nuevo_id, datos.descripcion_bio, datos.anios_experiencia, datos.tarifa_hora, datos.latitud, datos.longitud))
             if datos.oficios_ids:
@@ -256,6 +285,54 @@ def registrar_trabajador(datos: RegistroTrabajador):
     except psycopg2.IntegrityError: conn.rollback(); raise HTTPException(400, "Correo ya registrado.")
     except Exception as e: conn.rollback(); log.error(e); raise HTTPException(500, f"Error interno")
 
+@app.post("/crear-pago")
+def crear_pago(datos: SolicitudPago):
+    if sdk is None:
+        raise HTTPException(500, "Error: Mercado Pago no configurado.")
+
+    # 1. Configuración de la preferencia
+    preference_data = {
+        "items": [
+            {
+                "id": datos.servicio_id,
+                "title": datos.titulo,
+                "quantity": 1,
+                "currency_id": "MXN",
+                "unit_price": float(datos.precio)
+            }
+        ],
+        # 👇👇👇 REVISA BIEN ESTA PARTE 👇👇👇
+        "back_urls": {
+            "success": f"http://127.0.0.1:5502/frontend/pago_exitoso.html?servicio={datos.servicio_id}&trabajador={datos.trabajador_id}&propuesta={datos.propuesta_id}",
+            "failure": "http://127.0.0.1:5502/frontend/dashboard.html",
+            "pending": "http://127.0.0.1:5502/frontend/dashboard.html"
+        },
+        "auto_return": "approved"
+        # 👆👆👆 FIN DE LA PARTE CRÍTICA 👆👆👆
+    }
+
+    try:
+        # 2. Intentar crear la preferencia
+        preference_response = sdk.preference().create(preference_data)
+        
+        # Logs para depurar
+        print("\n--- RESPUESTA DE MERCADO PAGO ---")
+        print(preference_response)
+        print("---------------------------------\n")
+
+        if preference_response["status"] == 201:
+            return {"url_pago": preference_response["response"]["init_point"]}
+        else:
+            msg = preference_response.get("message", "Error desconocido")
+            # Si el error persiste, imprime preference_data para ver qué estamos enviando
+            print(f"Datos enviados: {preference_data}") 
+            raise HTTPException(400, f"MP Error: {msg}")
+
+    except Exception as e:
+        if isinstance(e, HTTPException): raise e
+        print(f"Error interno: {e}")
+        raise HTTPException(500, "Error procesando el pago.")
+    
 @app.post("/verificar-cuenta")
 def verificar_cuenta(datos: DatosVerificacion):
     conn = db_connections.get("pg_conn")
@@ -297,14 +374,19 @@ def login(datos: LoginRequest):
 # 6. ENDPOINTS: PERFILES
 # ==========================================
 
+
+# --- ENDPOINT GET (Sin pedir dirección) ---
 @app.get("/mi-perfil/{usuario_id}")
 def obtener_perfil_trabajador(usuario_id: str):
     conn = db_connections.get("pg_conn")
     try:
         with conn.cursor() as cursor:
+            # Solo traemos lo que existe en tu BD
             cursor.execute("""
                 SELECT u.nombre, u.apellidos, u.telefono, u.foto_perfil_url,
-                       dt.descripcion_bio, dt.anios_experiencia, dt.tarifa_hora_estimada, dt.validado_por_admin
+                       dt.descripcion_bio, dt.anios_experiencia, dt.tarifa_hora_estimada, 
+                       dt.calificacion_promedio, dt.total_evaluaciones, dt.validado_por_admin,
+                       dt.foto_ine_frente_url, dt.foto_ine_reverso_url, dt.antecedentes_penales_url
                 FROM usuarios u
                 JOIN detalles_trabajador dt ON u.id = dt.usuario_id
                 WHERE u.id = %s
@@ -314,17 +396,38 @@ def obtener_perfil_trabajador(usuario_id: str):
             return dict(perfil)
     except Exception as e: log.error(e); raise HTTPException(500, "Error interno")
 
+
+# --- ENDPOINT PUT (Sin actualizar dirección) ---
 @app.put("/mi-perfil/{usuario_id}")
 def actualizar_perfil_trabajador(usuario_id: str, datos: PerfilTrabajadorUpdate):
     conn = db_connections.get("pg_conn")
     try:
         with conn.cursor() as cursor:
-            cursor.execute("UPDATE usuarios SET nombre=%s, apellidos=%s, telefono=%s, foto_perfil_url=%s WHERE id=%s", (datos.nombre, datos.apellidos, datos.telefono, datos.foto_perfil_url, usuario_id))
-            cursor.execute("UPDATE detalles_trabajador SET descripcion_bio=%s, anios_experiencia=%s, tarifa_hora_estimada=%s, foto_ine_frente_url=%s, foto_ine_reverso_url=%s, antecedentes_penales_url=%s WHERE usuario_id=%s", (datos.descripcion_bio, datos.anios_experiencia, datos.tarifa_hora, datos.foto_ine_frente_url, datos.foto_ine_reverso_url, datos.antecedentes_penales_url, usuario_id))
+            # 1. Actualizar tabla usuarios (Nombre, Teléfono, Foto Perfil)
+            cursor.execute("""
+                UPDATE usuarios 
+                SET nombre=%s, apellidos=%s, telefono=%s, foto_perfil_url=%s 
+                WHERE id=%s
+            """, (datos.nombre, datos.apellidos, datos.telefono, datos.foto_perfil_url, usuario_id))
+            
+            # 2. Actualizar tabla detalles_trabajador (Bio, Experiencia, Tarifa, Docs)
+            cursor.execute("""
+                UPDATE detalles_trabajador SET 
+                    descripcion_bio=%s, anios_experiencia=%s, tarifa_hora_estimada=%s,
+                    foto_ine_frente_url=%s, foto_ine_reverso_url=%s, antecedentes_penales_url=%s
+                WHERE usuario_id=%s
+            """, (
+                datos.descripcion_bio, datos.anios_experiencia, datos.tarifa_hora,
+                datos.foto_ine_frente_url, datos.foto_ine_reverso_url, datos.antecedentes_penales_url, 
+                usuario_id
+            ))
             conn.commit()
-            return {"mensaje": "Perfil actualizado"}
-    except Exception as e: conn.rollback(); log.error(e); raise HTTPException(500, "Error actualizar")
-
+            return {"mensaje": "Perfil actualizado correctamente"}
+    except Exception as e: 
+        conn.rollback()
+        log.error(e)
+        raise HTTPException(500, "Error al actualizar perfil")
+    
 @app.get("/mi-perfil-cliente/{usuario_id}")
 def get_perfil_cliente(usuario_id: str):
     conn = db_connections.get("pg_conn")
@@ -446,16 +549,34 @@ def ver_propuestas(servicio_id: str):
     conn = db_connections.get("pg_conn")
     try:
         with conn.cursor() as cur:
+            # TRAEMOS DATOS COMPLETOS DEL TRABAJADOR
             cur.execute("""
                 SELECT p.id, p.precio_oferta, p.mensaje, p.trabajador_id,
-                       u.nombre, u.telefono, u.foto_perfil_url, dt.calificacion_promedio
+                       u.nombre, u.apellidos, u.foto_perfil_url, u.telefono,
+                       dt.calificacion_promedio, dt.total_evaluaciones,
+                       dt.anios_experiencia, dt.descripcion_bio
                 FROM propuestas p
                 JOIN usuarios u ON p.trabajador_id = u.id
                 JOIN detalles_trabajador dt ON u.id = dt.usuario_id
-                WHERE p.servicio_id = %s ORDER BY p.precio_oferta ASC
+                WHERE p.servicio_id = %s
+                ORDER BY p.precio_oferta ASC
             """, (servicio_id,))
-            return [dict(p, id=str(p['id']), trabajador_id=str(p['trabajador_id'])) for p in cur.fetchall()]
-    except Exception as e: log.error(e); raise HTTPException(500, "Error propuestas")
+            
+            # Convertimos a lista de diccionarios
+            resultados = []
+            for row in cur.fetchall():
+                d = dict(row)
+                d['id'] = str(d['id'])
+                d['trabajador_id'] = str(d['trabajador_id'])
+                # Convertimos decimales a float para que JS no falle
+                if d['calificacion_promedio']: d['calificacion_promedio'] = float(d['calificacion_promedio'])
+                if d['precio_oferta']: d['precio_oferta'] = float(d['precio_oferta'])
+                resultados.append(d)
+            return resultados
+
+    except Exception as e: 
+        log.error(e)
+        raise HTTPException(500, "Error cargando propuestas")
 
 @app.post("/servicios/contratar")
 def contratar_trabajador(datos: AceptarPropuesta):
@@ -473,9 +594,11 @@ def mis_trabajos_trabajador(trabajador_id: str):
     conn = db_connections.get("pg_conn")
     try:
         with conn.cursor() as cursor:
+            # CORRECCIÓN: Agregamos s.calificacion y s.resena
             cursor.execute("""
                 SELECT s.id, s.titulo, s.descripcion, s.estado, s.fecha_solicitud, s.direccion_texto, 
-                       s.precio_estimado, u.nombre as cliente_nombre, u.telefono as cliente_telefono
+                       s.precio_estimado, s.calificacion, s.resena,
+                       u.nombre as cliente_nombre, u.telefono as cliente_telefono
                 FROM servicios s
                 JOIN usuarios u ON s.cliente_id = u.id
                 WHERE s.trabajador_id = %s

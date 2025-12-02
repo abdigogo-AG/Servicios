@@ -118,10 +118,10 @@
     <!-- HEADER -->
     <div class="top-nav">
         <div style="font-weight: bold; color: #0b69ff; font-size: 22px; cursor:pointer;" onclick="window.location.href='dashboard.html'">
-            <i class="fas fa-home"></i> ServiciosApp
+            <i class="fas fa-home"></i> Homely
         </div>
-        <button onclick="window.location.href='dashboard.html'" style="border: 1px solid #ddd; background: white; padding: 6px 15px; border-radius: 20px; cursor: pointer;">
-            <i class="fas fa-arrow-left"></i> Volver al Panel
+        <button onclick="window.location.href='principal.html'" style="border: 1px solid #ddd; background: white; padding: 6px 15px; border-radius: 20px; cursor: pointer;">
+            <i class="fas fa-arrow-left"></i> Volver 
         </button>
     </div>
 
@@ -256,8 +256,8 @@
                 document.getElementById('ciudad').value = data.ciudad;
 
                 // Mapa
-                const lat = parseFloat(data.latitud) || 19.4326;
-                const lon = parseFloat(data.longitud) || -99.1332;
+                const lat = parseFloat(data.latitud) || 17.80967;
+                const lon = parseFloat(data.longitud) || -97.77643;
                 initMap(lat, lon);
 
             } catch (e) { console.error(e); }

@@ -3,338 +3,213 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Servicios del Hogar - Expertos al Instante</title>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <title>Servicios del Hogar</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="stylesheet" href="css/principal.css">
     <style>
-        /* Estilos extra para navegación y feed */
-        .nav-user { display: flex; align-items: center; gap: 15px; }
-        .user-greeting { font-weight: 600; color: #555; }
+        /* Utilidad para ocultar cosas */
         .d-none { display: none !important; }
         
-        .btn-logout { 
-            border: 1px solid #dc3545; color: #dc3545; background: white; 
-            padding: 5px 15px; border-radius: 20px; cursor: pointer; font-weight: bold; transition: 0.2s;
+        /* Estilos Header Usuario */
+        .nav-user { display: flex; align-items: center; gap: 10px; }
+        .user-name { font-weight: bold; color: #555; margin-right: 5px; }
+        
+        /* --- NUEVO ESTILO PARA LOS BOTONES DEL HEADER --- */
+        .btn-header-link {
+            text-decoration: none;
+            color: #0b69ff;
+            background-color: #f0f7ff;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            transition: 0.3s;
+            display: flex; align-items: center; gap: 5px;
+        }
+        .btn-header-link:hover {
+            background-color: #0b69ff;
+            color: white;
+        }
+
+        .btn-logout {
+            border: 1px solid #dc3545; color: #dc3545; background: white;
+            padding: 5px 15px; border-radius: 20px; cursor: pointer; font-weight: bold;
         }
         .btn-logout:hover { background: #dc3545; color: white; }
-
-        /* Estilo Botones Menú */
-        .btn-menu-item {
-            margin-left: 0; background: #eef4ff; color: #0b69ff; border: none;
-            padding: 8px 15px; border-radius: 20px; text-decoration: none; font-weight: 500; font-size: 14px;
-        }
-        .btn-menu-item:hover { background: #dceaff; }
-
-        /* Estilos del Feed de Trabajador */
-        .feed-container { max-width: 900px; margin: 40px auto; padding: 20px; }
-        .card-trabajo {
-            background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-left: 5px solid #0b69ff;
-            display: flex; justify-content: space-between; align-items: center;
-            opacity: 0; animation: fadeInUp 0.5s ease-out forwards;
-        }
-        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-
-        .info-trabajo h3 { margin: 0 0 10px; color: #333; }
-        .etiqueta { background: #eef4ff; color: #0b69ff; padding: 5px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; }
-        .precio-tag { font-size: 18px; font-weight: bold; color: #28a745; }
-        .btn-aceptar {
-            background: #0b69ff; color: white; border: none; padding: 10px 20px; 
-            border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.2s;
-        }
-        .btn-aceptar:hover { background: #0056b3; transform: scale(1.05); }
     </style>
 </head>
 <body>
 
     <header>
-        <div class="logo">
-            <i class="fas fa-home"></i> ServiciosApp
+        <div class="logo" onclick="window.location.href='principal.html'" style="cursor: pointer;">
+            <i class="fas fa-home"></i> Homely
         </div>
         
         <nav class="nav-buttons">
-            <div id="nav-guest">   
+            <div id="nav-invitado">
                 <a href="login.html" class="btn-login">Iniciar Sesión</a>
                 <a href="registro.html" class="btn-registro">Crear Cuenta</a>
             </div>
 
-            <div id="nav-logged" class="nav-user d-none">
-                <span id="user-name" class="user-greeting">Hola, Usuario</span>
-                
-                <a id="menu-cliente-solicitudes" href="mis_solicitudes.html" class="btn-menu-item d-none">
-                    <i class="fas fa-list"></i> Mis Solicitudes
+            <div id="nav-usuario" class="nav-user d-none">
+                <span id="saludo-usuario" class="user-name">Hola...</span>
+
+                <a id="nav-btn-solicitudes" href="dashboard.html" class="btn-header-link d-none">
+                    <i class="fas fa-list-ul"></i> Mis Solicitudes
                 </a>
 
-                <a id="menu-trabajador-trabajos" href="mis_trabajos.html" class="btn-menu-item d-none">
-    <i class="fas fa-briefcase"></i> Mis Trabajos
-</a>
-                
-                <a href="perfil_cliente.html" class="btn-login" style="margin-left: 0; background: transparent; border: 1px solid #ddd; color: #555;">Mi Perfil</a>
+                <a id="nav-btn-trabajos" href="dashboard.html" class="btn-header-link d-none">
+                    <i class="fas fa-briefcase"></i> Mis Trabajos
+                </a>
 
-                <button onclick="cerrarSesion()" class="btn-logout"><i class="fas fa-sign-out-alt"></i></button>
+                <a id="nav-btn-perfil" href="#" class="btn-header-link">
+                    <i class="fas fa-user-circle"></i> Mi Perfil
+                </a>
+
+                <button onclick="cerrarSesion()" class="btn-logout" title="Salir">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
             </div>
         </nav>
     </header>
 
-    <div id="vista-cliente">
-        <section class="hero">
-            <h1 id="hero-title">Expertos de confianza <br> para tu <span>Hogar</span></h1>
-            <p id="hero-desc">Encuentra profesionales verificados cerca de ti en minutos.</p>
+    <section class="hero">
+        <h1 id="hero-titulo">Bienvenido a <br> <span>Homely</span></h1>
+        <p id="hero-desc">La plataforma segura para conectar hogares con expertos.</p>
+        
+        <div class="hero-buttons">
+            <a id="btn-solicitar" href="#" class="btn-grande btn-cliente" onclick="manejarClickCliente(event)">
+                <i class="fas fa-paper-plane"></i> Solicitar un Servicio
+            </a>
             
-            <div class="hero-buttons">
-                <a id="btn-hero-cliente" href="solicitar.html" class="btn-grande btn-cliente" onclick="verificarSesionAntes(event)">
-                    <i class="fas fa-paper-plane"></i> Solicitar un Servicio   
-                </a>
-                
-                <a id="btn-hero-trabajador" href="registro.html?rol=trabajador" class="btn-grande btn-trabajador">
-                    <i class="fas fa-tools"></i> Quiero Trabajar
-                </a>
-            </div>
-        </section>
-
-        <section class="servicios">
-            <h2 class="section-title">¿Qué necesitas solucionar hoy?</h2>
-            <div class="grid-servicios" id="grid-categorias">
-                <p>Cargando servicios...</p>
-            </div>
-        </section>
-
-        <section id="pasos" class="pasos">
-            <h2 class="section-title">Es así de simple</h2>
-            <div class="grid-pasos">
-                <div class="paso"><div class="paso-numero">01</div><h3 id="p1-t">Regístrate</h3><p id="p1-d">Crea tu cuenta gratis.</p></div>
-                <div class="paso"><div class="paso-numero">02</div><h3 id="p2-t">Solicita</h3><p id="p2-d">Describe tu problema.</p></div>
-                <div class="paso"><div class="paso-numero">03</div><h3 id="p3-t">Agenda</h3><p id="p3-d">Recibe al experto.</p></div>
-                <div class="paso"><div class="paso-numero">04</div><h3 id="p4-t">Califica</h3><p id="p4-d">Pago seguro y reseñas.</p></div>
-            </div>
-        </section>
-    </div>
-
-    <div id="vista-trabajador" class="d-none">
-        <div class="feed-container">
-            <div style="text-align: center; margin-bottom: 30px;">
-                <h2 style="color: #333;">Trabajos Disponibles</h2>
-                <p style="color: #666;">Estos clientes están buscando ayuda cerca de ti.</p>
-            </div>
-            
-            <div id="lista-trabajos">
-                <div style="text-align: center; padding: 40px;">
-                    <i class="fas fa-spinner fa-spin" style="font-size: 30px; color: #0b69ff;"></i>
-                    <p>Buscando oportunidades...</p>
-                </div>
-            </div>
+            <a id="btn-trabajar" href="#" class="btn-grande btn-trabajador" onclick="manejarClickTrabajador(event)">
+                <i class="fas fa-tools"></i> Quiero Trabajar
+            </a>
         </div>
-    </div>
+    </section>
+
+    <section class="pasos">
+        <h2 class="section-title" id="titulo-instrucciones">Cómo funciona</h2>
+        <div class="grid-pasos">
+            <div class="paso"><div class="paso-numero">01</div><h3 id="p1-t">Regístrate</h3><p id="p1-d">Crea tu cuenta gratis y verifica tu identidad.</p></div>
+            <div class="paso"><div class="paso-numero">02</div><h3 id="p2-t">Elige</h3><p id="p2-d">Selecciona qué servicio necesitas o qué ofreces.</p></div>
+            <div class="paso"><div class="paso-numero">03</div><h3 id="p3-t">Conecta</h3><p id="p3-d">Encuentra a la persona ideal en minutos.</p></div>
+        </div>
+    </section>
 
     <footer>
-        <p>© 2025 Servicios del Hogar.</p>
+        <p style="text-align: center; padding: 20px; color: #666;">© 2025 Homely</p>
     </footer>
 
     <script>
-        const API_URL = "http://localhost:8080";
-        
-        // Textos dinámicos
         const textos = {
-            cliente: { h1: "Bienvenido de nuevo.<br>¿Qué necesitas <span>Hoy</span>?", desc: "Describe tu problema y recibe ayuda rápida." },
-            invitado: { h1: "Expertos de confianza <br> para tu <span>Hogar</span>", desc: "Regístrate para solicitar servicios." }
+            invitado: {
+                titulo: "Bienvenido a <br> <span>Homely</span>", desc: "La plataforma segura para conectar hogares con expertos.",
+                p1t: "Regístrate", p1d: "Crea una cuenta para empezar.",
+                p2t: "Elige", p2d: "Dinos si buscas ayuda o quieres trabajar.",
+                p3t: "Conecta", p3d: "Nosotros nos encargamos del resto."
+            },
+            cliente: {
+                titulo: "Hola Cliente, <br> ¿Qué necesitas <span>Hoy</span>?", desc: "Tus expertos están listos. Publica tu problema ahora.",
+                p1t: "Publica", p1d: "Usa el botón de arriba para pedir ayuda.",
+                p2t: "Espera", p2d: "Recibirás propuestas de expertos cercanos.",
+                p3t: "Acepta", p3d: "Elige al mejor y califícalo al final."
+            },
+            trabajador: {
+                titulo: "Hola Colega, <br> Hay trabajo <span>Esperándote</span>", desc: "Revisa las solicitudes disponibles en tu zona.",
+                p1t: "Explora", p1d: "Ve al panel de trabajos disponibles.",
+                p2t: "Postúlate", p2d: "Envía tu cotización a los clientes.",
+                p3t: "Gana", p3d: "Realiza el trabajo y recibe tu pago."
+            }
         };
 
-        document.addEventListener('DOMContentLoaded', async () => {
-            const usuarioId = localStorage.getItem("usuario_id");
-            const usuarioNombre = localStorage.getItem("usuario_nombre");
-            const esTrabajador = localStorage.getItem("es_trabajador") === "true"; 
+        document.addEventListener('DOMContentLoaded', () => {
+            const uid = localStorage.getItem("usuario_id");
+            const nombre = localStorage.getItem("usuario_nombre");
+            const esTrabajador = localStorage.getItem("es_trabajador") === "true";
 
-            // --- LÓGICA DE ROLES ---
-            if (usuarioId) {
-                // 1. USUARIO LOGUEADO (General)
-                document.getElementById('nav-guest').classList.add('d-none');
-                document.getElementById('nav-logged').classList.remove('d-none');
-                document.getElementById('user-name').innerText = `Hola, ${usuarioNombre}`;
-                document.getElementById('btn-hero-trabajador').classList.add('d-none'); // Nadie logueado ve "Quiero registrarme como trabajador"
+            // Referencias del DOM
+            const navInvitado = document.getElementById('nav-invitado');
+            const navUsuario = document.getElementById('nav-usuario');
+            const btnSolicitar = document.getElementById('btn-solicitar');
+            const btnTrabajar = document.getElementById('btn-trabajar');
+            
+            // Botones del Header (NUEVOS)
+            const navBtnSolicitudes = document.getElementById('nav-btn-solicitudes');
+            const navBtnTrabajos = document.getElementById('nav-btn-trabajos');
+            const navBtnPerfil = document.getElementById('nav-btn-perfil');
+
+            if (!uid) {
+                // --- MODO INVITADO ---
+                aplicarTextos('invitado');
+            } else {
+                // --- MODO USUARIO ---
+                navInvitado.classList.add('d-none');
+                navUsuario.classList.remove('d-none');
+                document.getElementById('saludo-usuario').innerText = "Hola, " + nombre.split(" ")[0];
 
                 if (esTrabajador) {
-                    // 2. ROL TRABAJADOR
-                    console.log("Modo Trabajador");
-                    // Menu
-                    document.getElementById('menu-trabajador-trabajos').classList.remove('d-none');
-                    // Vistas
-                    document.getElementById('vista-cliente').classList.add('d-none'); // Ocultar portada
-                    document.getElementById('vista-trabajador').classList.remove('d-none'); // Mostrar feed
-                    cargarFeedTrabajos(); 
+                    // >>> ES TRABAJADOR <<<
+                    btnSolicitar.classList.add('d-none');
+                    btnTrabajar.innerHTML = '<i class="fas fa-briefcase"></i> Ver Trabajos Disponibles';
+                    
+                    // Header: Mostrar botones de trabajador
+                    navBtnTrabajos.classList.remove('d-none');
+                    navBtnPerfil.href = "perfil_trabajador.html"; // Asegúrate de crear este archivo después
+                    
+                    aplicarTextos('trabajador');
                 } else {
-                    // 3. ROL CLIENTE
-                    console.log("Modo Cliente");
-                    // Menu
-                    document.getElementById('menu-cliente-solicitudes').classList.remove('d-none');
-                    // Vistas
-                    cambiarTextos('cliente');
-                    cargarCategorias();
+                    // >>> ES CLIENTE <<<
+                    btnTrabajar.classList.add('d-none');
+                    
+                    // Header: Mostrar botones de cliente
+                    navBtnSolicitudes.classList.remove('d-none');
+                    navBtnPerfil.href = "perfil_cliente.html"; // Asegúrate de crear este archivo después
+
+                    aplicarTextos('cliente');
                 }
-            } else {
-                // 4. INVITADO
-                cambiarTextos('invitado');
-                cargarCategorias();
             }
         });
 
-        // --- FUNCIONES API ---
+        // --- MANEJO DE CLICS HERO ---
 
-        async function cargarCategorias() {
-            try {
-                const res = await fetch(`${API_URL}/categorias`);
-                const categorias = await res.json();
-                const contenedor = document.getElementById("grid-categorias");
-                contenedor.innerHTML = "";
-                
-                categorias.forEach(cat => {
-                    const html = `
-                        <div class="card-servicio" onclick="irASolicitar(${cat.id})">
-                            <div class="icon-box"><i class="${cat.icono_url || 'fas fa-tools'}"></i></div>
-                            <h3>${cat.nombre}</h3>
-                        </div>`;
-                    contenedor.innerHTML += html;
-                });
-            } catch (e) { console.error("Error categorias:", e); }
+        function manejarClickCliente(e) {
+            const uid = localStorage.getItem("usuario_id");
+            if (!uid) {
+                e.preventDefault();
+                alertaRegistroRequerido('cliente');
+            } else {
+                window.location.href = "solicitar.html";
+            }
         }
 
-        async function cargarFeedTrabajos() {
-            try {
-                const res = await fetch(`${API_URL}/feed-servicios`);
-                const trabajos = await res.json();
-                const contenedor = document.getElementById("lista-trabajos");
-                contenedor.innerHTML = "";
-
-                if(trabajos.length === 0) {
-                    contenedor.innerHTML = `
-                        <div style="text-align:center; padding: 40px; color:#888;">
-                            <i class="fas fa-mug-hot" style="font-size: 40px; margin-bottom:10px;"></i>
-                            <p>No hay trabajos disponibles por ahora. ¡Vuelve más tarde!</p>
-                        </div>`;
-                    return;
-                }
-
-                trabajos.forEach(t => {
-                    const html = `
-                        <div class="card-trabajo">
-                            <div class="info-trabajo">
-                                <span class="etiqueta">${t.categoria}</span>
-                                <h3>${t.titulo}</h3>
-                                <p style="color:#666; font-size:14px;"><i class="fas fa-map-marker-alt"></i> ${t.direccion_texto}</p>
-                                <p style="font-size:13px; margin-top:5px;">${t.descripcion}</p>
-                                <div style="margin-top: 10px; font-size: 12px; color: #888;">
-                                    Publicado por: ${t.cliente_nombre || 'Usuario'}
-                                </div>
-                            </div>
-                            <div style="text-align:right; min-width: 140px;">
-                                <div class="precio-tag">$${t.precio_estimado || 'A tratar'}</div>
-                                <button class="btn-aceptar" onclick="postularse('${t.id}')">
-                                    <i class="fas fa-hand-paper"></i> Aceptar
-                                </button>
-                            </div>
-                        </div>`;
-                    contenedor.innerHTML += html;
-                });
-            } catch (e) { console.error("Error feed:", e); }
+        function manejarClickTrabajador(e) {
+            const uid = localStorage.getItem("usuario_id");
+            if (!uid) {
+                e.preventDefault();
+                alertaRegistroRequerido('trabajador');
+            } else {
+                window.location.href = "ver_trabajos.html";
+            }
         }
 
-        async function postularse(servicioId) {
-            // Usamos SweetAlert2 para una mejor experiencia
-            const { value: formValues } = await Swal.fire({
-                title: 'Postularse al Trabajo',
-                html:
-                    '<input id="swal-precio" class="swal2-input" placeholder="Tu precio (ej: 500)">' +
-                    '<textarea id="swal-mensaje" class="swal2-textarea" placeholder="Mensaje al cliente (ej: Llego en 30 min)"></textarea>',
-                focusConfirm: false,
+        // --- FUNCIONES AUXILIARES ---
+
+        function alertaRegistroRequerido(rolDestino) {
+            Swal.fire({
+                title: '¡Alto ahí!',
+                text: "Para usar esta opción necesitas una cuenta.",
+                icon: 'info',
                 showCancelButton: true,
-                confirmButtonText: 'Enviar Propuesta',
-                cancelButtonText: 'Cancelar',
-                preConfirm: () => {
-                    return {
-                        precio: document.getElementById('swal-precio').value,
-                        mensaje: document.getElementById('swal-mensaje').value
-                    }
+                confirmButtonColor: '#0b69ff',
+                confirmButtonText: 'Iniciar Sesión / Registrarse',
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    localStorage.setItem('rol_preferido', rolDestino);
+                    window.location.href = "login.html";
                 }
             });
-
-            if (!formValues) return; // Cancelado
-
-            if (!formValues.precio || !formValues.mensaje) {
-                Swal.fire('Error', 'Debes ingresar un precio y un mensaje', 'warning');
-                return;
-            }
-
-            const trabajadorId = localStorage.getItem("usuario_id");
-            const datos = {
-                servicio_id: servicioId,
-                trabajador_id: trabajadorId,
-                precio_oferta: parseFloat(formValues.precio),
-                mensaje: formValues.mensaje
-            };
-
-            try {
-                const res = await fetch(`${API_URL}/propuestas`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(datos)
-                });
-                const resultado = await res.json();
-
-                if (res.ok) {
-                    Swal.fire('¡Enviado!', resultado.mensaje, 'success');
-                } else {
-                    Swal.fire('Error', resultado.detail, 'error');
-                }
-            } catch (error) {
-                Swal.fire('Error', 'No se pudo conectar con el servidor', 'error');
-            }
-        }
-
-        // --- UTILS ---
-        function verificarSesionAntes(e) {
-            const uid = localStorage.getItem("usuario_id");
-            if (!uid) {
-                e.preventDefault(); 
-                Swal.fire({
-                    title: '¡Ups!',
-                    text: 'Necesitas iniciar sesión para solicitar un servicio.',
-                    icon: 'info',
-                    showCancelButton: true,
-                    confirmButtonText: 'Ir a Login',
-                    cancelButtonText: 'Cancelar'
-                }).then((result) => {
-                    if (result.isConfirmed) window.location.href = "login.html";
-                });
-            } else {
-                // Si sí está logueado, verificamos que NO sea trabajador intentando pedir
-                const esTrabajador = localStorage.getItem("es_trabajador") === "true";
-                if(esTrabajador) {
-                    e.preventDefault();
-                    Swal.fire('Atención', 'Tu cuenta es de Trabajador. Para pedir servicios, regístrate como Cliente.', 'warning');
-                }
-            }
-            // Si es cliente, el href="solicitar.html" funciona normal
-        }
-
-        function irASolicitar(idCat) {
-            const uid = localStorage.getItem("usuario_id");
-            if (!uid) {
-                Swal.fire({
-                    title: '¡Ups!',
-                    text: 'Necesitas iniciar sesión para continuar.',
-                    icon: 'info',
-                    confirmButtonText: 'Ir a Login'
-                }).then((r) => { if(r.isConfirmed) window.location.href = "login.html"; });
-                return;
-            }
-            localStorage.setItem("categoria_seleccionada", idCat);
-            window.location.href = "solicitar.html";
-        }
-
-        function cambiarTextos(rol) {
-            const t = textos[rol];
-            document.getElementById('hero-title').innerHTML = t.h1;
-            document.getElementById('hero-desc').innerText = t.desc;
         }
 
         function cerrarSesion() {
@@ -346,10 +221,21 @@
             }).then((result) => {
                 if (result.isConfirmed) {
                     localStorage.clear();
-                    window.location.reload();
+                    window.location.reload(); 
                 }
             });
         }
+
+        function aplicarTextos(rol) {
+            const t = textos[rol];
+            document.getElementById('hero-titulo').innerHTML = t.titulo;
+            document.getElementById('hero-desc').innerText = t.desc;
+            
+            document.getElementById('p1-t').innerText = t.p1t; document.getElementById('p1-d').innerText = t.p1d;
+            document.getElementById('p2-t').innerText = t.p2t; document.getElementById('p2-d').innerText = t.p2d;
+            document.getElementById('p3-t').innerText = t.p3t; document.getElementById('p3-d').innerText = t.p3d;
+        }
     </script>
+
 </body>
 </html>

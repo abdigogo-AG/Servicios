@@ -82,7 +82,7 @@ CREATE TABLE detalles_trabajador (
     foto_ine_frente_url TEXT,
     foto_ine_reverso_url TEXT,
     antecedentes_penales_url TEXT,
-    validado_por_admin BOOLEAN DEFAULT FALSE,
+    validado_por_admin BOOLEAN DEFAULT TRUE,
     
     -- Ubicación Base
     latitud DECIMAL(9,6),

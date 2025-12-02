@@ -17,19 +17,6 @@ services:
     networks:
     - services_net
 
-  db_mongo:
-    image: mongo:7.0
-    restart: always
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin_mongo
-      MONGO_INITDB_ROOT_PASSWORD: "un_password_seguro_para_mongo"
-    volumes:
-      - mongo_data:/data/db
-      - ./mongo_scripts/init.js:/docker-entrypoint-initdb.d/init.js
-    ports:
-    - "27017:27017"
-    networks:
-    - services_net
 
 
 # --- Servicio 3: API de Python (NUEVO) ---
@@ -44,7 +31,7 @@ services:
     environment:
       # Pasa las URLs de conexión a la API
       POSTGRES_URL: "postgresql://app_user:un_password_de_app_seguro@db_postgres:5432/registros"
-      MONGO_URL: "mongodb://admin_mongo:un_password_seguro_para_mongo@db_mongo:27017/"
+      MP_ACCESS_TOKEN: "APP_USR-5568639099903841-120208-8abf0462fa02216d9dc8675848e6d77c-3033160403"
     volumes:
       # --- ¡ESTA ES LA LÍNEA NUEVA! ---
       # Mapea la carpeta 'uploads' de tu PC a la carpeta '/app/uploads' del contenedor
@@ -56,7 +43,6 @@ services:
     
     depends_on:
       - db_postgres # Asegura que Postgres inicie primero
-      - db_mongo    # Asegura que Mongo inicie primero
     networks:
       - services_net # Conecta la API a la misma red
 
@@ -66,7 +52,6 @@ services:
 
 volumes:
   postgres_data:
-  mongo_data:
 
 networks:
   services_net:

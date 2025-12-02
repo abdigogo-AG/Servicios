@@ -317,8 +317,8 @@
 
         function initMapDefault() {
             if (map) return;
-            const defaultLat = 19.4326;
-            const defaultLon = -99.1332;
+            const defaultLat = 17.80967;
+            const defaultLon = -97.77643;
             
             map = L.map('mapa-contenedor').setView([defaultLat, defaultLon], 13);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
@@ -450,7 +450,7 @@
                 
                 if (res.ok) {
                     alert("¡ÉXITO! " + data.mensaje);
-                    window.location.href = "verificar.html"; 
+                    window.location.href = "login.html"; 
                 } else {
                     alert("Error: " + data.detail);
                 }
