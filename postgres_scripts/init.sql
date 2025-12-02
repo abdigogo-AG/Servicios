@@ -1,27 +1,32 @@
 -- Conectarse a la base de datos
 \c registros;
 
+-- Habilitar extensión para funciones criptográficas (Opcional pero útil)
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- ==========================================
 -- 1. CATÁLOGOS (OFICIOS)
 -- ==========================================
 CREATE TABLE categorias_oficios (
     id SERIAL PRIMARY KEY,
-    nombre VARCHAR(50) UNIQUE NOT NULL, -- 'Plomero', 'Electricista'
+    nombre VARCHAR(50) UNIQUE NOT NULL,
     icono_url TEXT 
 );
 
--- Insertar los oficios básicos automáticamente
+-- Insertar oficios por defecto
 INSERT INTO categorias_oficios (nombre, icono_url) VALUES 
     ('Plomero', 'fas fa-wrench'), 
     ('Electricista', 'fas fa-bolt'), 
     ('Carpintero', 'fas fa-hammer'), 
     ('Jardinero', 'fas fa-leaf'), 
     ('Pintor', 'fas fa-paint-roller'), 
-    ('Albañil', 'fas fa-trowel') 
+    ('Albañil', 'fas fa-trowel'),
+    ('Limpieza', 'fas fa-broom'),
+    ('Mecánico', 'fas fa-car-wrench')
 ON CONFLICT DO NOTHING;
 
 -- ==========================================
--- 2. USUARIOS (TABLA MADRE)
+-- 2. USUARIOS (TABLA MAESTRA)
 -- ==========================================
 CREATE TABLE usuarios (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -33,12 +38,13 @@ CREATE TABLE usuarios (
     fecha_nacimiento DATE, 
     foto_perfil_url TEXT,
     fecha_registro TIMESTAMPTZ DEFAULT NOW(),
+    
     activo BOOLEAN DEFAULT TRUE,
     codigo_verificacion VARCHAR(6),
 
-        -- PODERES DE ADMIN
+    -- SEGURIDAD Y ADMIN
     es_admin BOOLEAN DEFAULT FALSE,
-    bloqueado_hasta TIMESTAMPTZ DEFAULT NULL -- Si tiene fecha futura, no puede entrar
+    bloqueado_hasta TIMESTAMPTZ DEFAULT NULL 
 );
 
 -- ==========================================
@@ -54,7 +60,7 @@ CREATE TABLE detalles_cliente (
     codigo_postal VARCHAR(10),
     ciudad VARCHAR(100),
     
-    -- Coordenadas GPS
+    -- Ubicación GPS
     latitud DECIMAL(9,6),
     longitud DECIMAL(9,6),
     
@@ -66,11 +72,13 @@ CREATE TABLE detalles_cliente (
 -- ==========================================
 CREATE TABLE detalles_trabajador (
     usuario_id UUID PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
+    
+    -- Perfil Profesional
     descripcion_bio TEXT,
     anios_experiencia INT,
     tarifa_hora_estimada DECIMAL(10,2),
     
-    -- Documentación
+    -- Documentación Legal
     foto_ine_frente_url TEXT,
     foto_ine_reverso_url TEXT,
     antecedentes_penales_url TEXT,
@@ -80,9 +88,10 @@ CREATE TABLE detalles_trabajador (
     latitud DECIMAL(9,6),
     longitud DECIMAL(9,6),
     radio_cobertura_km INT DEFAULT 10,
+    
     disponible BOOLEAN DEFAULT TRUE,
     
-    -- Métricas
+    -- Reputación
     calificacion_promedio DECIMAL(3, 2) DEFAULT 0, 
     total_evaluaciones INT DEFAULT 0
 );
@@ -90,8 +99,6 @@ CREATE TABLE detalles_trabajador (
 -- ==========================================
 -- 5. RELACIÓN TRABAJADOR <-> OFICIOS
 -- ==========================================
---Relacion de muchos a muchos
--- Esta tabla es vital para que un trabajador pueda ser "Plomero" Y "Electricista"
 CREATE TABLE trabajador_oficios (
     usuario_id UUID REFERENCES detalles_trabajador(usuario_id) ON DELETE CASCADE,
     categoria_id INT REFERENCES categorias_oficios(id) ON DELETE CASCADE,
@@ -99,85 +106,58 @@ CREATE TABLE trabajador_oficios (
 );
 
 -- ==========================================
--- 6. ÍNDICES (OPTIMIZACIÓN)
+-- 6. SERVICIOS (TRABAJOS)
+-- ==========================================
+CREATE TYPE estado_servicio AS ENUM ('SOLICITADO', 'ACEPTADO', 'EN_PROCESO', 'TERMINADO', 'CANCELADO');
+
+CREATE TABLE servicios (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    
+    -- Relaciones
+    cliente_id UUID REFERENCES detalles_cliente(usuario_id) NOT NULL,
+    trabajador_id UUID REFERENCES detalles_trabajador(usuario_id), -- NULL al principio
+    categoria_id INT REFERENCES categorias_oficios(id),
+    
+    -- Detalles
+    titulo VARCHAR(150),
+    descripcion TEXT,
+    foto_evidencia_url TEXT,
+    
+    -- Ubicación (Snapshot)
+    direccion_texto TEXT,
+    latitud DECIMAL(9,6),
+    longitud DECIMAL(9,6),
+    
+    -- Tiempos y Costos
+    fecha_solicitud TIMESTAMPTZ DEFAULT NOW(),
+    fecha_programada TIMESTAMPTZ,
+    precio_estimado DECIMAL(10,2),
+    
+    -- Finalización
+    calificacion INT DEFAULT NULL,
+    resena TEXT DEFAULT NULL,
+    
+    estado estado_servicio DEFAULT 'SOLICITADO'
+);
+
+-- ==========================================
+-- 7. PROPUESTAS (POSTULACIONES)
+-- ==========================================
+CREATE TABLE propuestas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    servicio_id UUID REFERENCES servicios(id) ON DELETE CASCADE,
+    trabajador_id UUID REFERENCES detalles_trabajador(usuario_id) ON DELETE CASCADE,
+    mensaje TEXT, 
+    precio_oferta DECIMAL(10,2),
+    aceptada BOOLEAN DEFAULT FALSE,
+    fecha_creacion TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ==========================================
+-- 8. ÍNDICES
 -- ==========================================
 CREATE INDEX IF NOT EXISTS idx_correo ON usuarios (correo_electronico);
-
-
--- Usuario: admin@sistema.com / Password: admin123(encriptado)
--- El hash es de 'admin123' generado con bcrypt
-
-
-
-
-
-
-
-
-
--- -- 5. Servicios (Depende de Clientes y Trabajadores)
--- CREATE TYPE estado_servicio AS ENUM (
---     'SOLICITADO', 'ACEPTADO', 'EN_CAMINO', 'EN_PROCESO', 'TERMINADO', 'CANCELADO'
--- );
-
--- CREATE TABLE servicios (
---     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
---     cliente_id UUID REFERENCES detalles_cliente(usuario_id),
---     trabajador_id UUID REFERENCES detalles_trabajador(usuario_id),
---     categoria_id INT REFERENCES categorias_oficios(id),
-    
---     descripcion_corta VARCHAR(255),
---     fecha_programada TIMESTAMPTZ,
---     precio_acordado DECIMAL(10,2),
---     estado estado_servicio DEFAULT 'SOLICITADO',
-    
---     -- Snapshot de la dirección
---     direccion_servicio JSONB, 
-    
---     created_at TIMESTAMPTZ DEFAULT NOW(),
---     updated_at TIMESTAMPTZ DEFAULT NOW()
--- );
-
--- -- 6. Evaluaciones (Depende de Servicios)
--- CREATE TABLE evaluaciones (
---     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
---     servicio_id UUID REFERENCES servicios(id),
---     cliente_id UUID REFERENCES detalles_cliente(usuario_id),
---     trabajador_id UUID REFERENCES detalles_trabajador(usuario_id),
-    
---     puntuacion INT NOT NULL CHECK (puntuacion >= 0 AND puntuacion <= 5),
---     comentario_corto VARCHAR(255),
-    
---     created_at TIMESTAMPTZ DEFAULT NOW()
--- );
-
--- -- Índices
--- CREATE INDEX IF NOT EXISTS idx_correo ON usuarios (correo_electronico);
--- CREATE INDEX IF NOT EXISTS idx_trabajador_geo ON detalles_trabajador (latitud, longitud);
-
--- -- 7. Lógica del Trigger (Promedios)
--- CREATE OR REPLACE FUNCTION actualizar_promedio_trabajador()
--- RETURNS TRIGGER AS $$
--- BEGIN
---     UPDATE detalles_trabajador
---     SET 
---         calificacion_promedio = (
---             SELECT COALESCE(AVG(puntuacion), 0) -- COALESCE evita errores si es null
---             FROM evaluaciones 
---             WHERE trabajador_id = NEW.trabajador_id
---         ),
---         total_evaluaciones = (
---             SELECT COUNT(*) 
---             FROM evaluaciones 
---             WHERE trabajador_id = NEW.trabajador_id
---         )
---     WHERE usuario_id = NEW.trabajador_id;
-    
---     RETURN NEW;
--- END;
--- $$ LANGUAGE plpgsql;
-
--- CREATE TRIGGER trigger_nueva_evaluacion
---AFTER INSERT ON evaluaciones
--- FOR EACH ROW
--- EXECUTE FUNCTION actualizar_promedio_trabajador();
+CREATE INDEX IF NOT EXISTS idx_servicios_cliente ON servicios(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_servicios_trabajador ON servicios(trabajador_id);
+CREATE INDEX IF NOT EXISTS idx_servicios_estado ON servicios(estado);
+CREATE INDEX IF NOT EXISTS idx_propuestas_servicio ON propuestas(servicio_id);

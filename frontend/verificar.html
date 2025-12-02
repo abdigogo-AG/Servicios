@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Verificar Cuenta</title>
-    <link rel="stylesheet" href="[https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css](https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css)">
-    <link rel="stylesheet" href="/frontend/css/login.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="css/login.css">
 </head>
 <body>
 
@@ -16,13 +16,12 @@
             </div>
             <h2>Verifica tu Correo</h2>
             <p style="color: #666; margin-bottom: 20px; font-size: 14px;">
-                Hemos enviado un código de 6 dígitos a tu correo. <br>
-                Ingrésalo para activar tu cuenta.
+                Ingresa el código que te enviamos (revisa tu terminal de Python/Docker).
             </p>
 
             <form id="form-verificacion">
                 <div class="input-group">
-                    <label for="correo">Confirma tu correo</label>
+                    <label for="correo">Tu correo</label>
                     <input type="email" id="correo" required placeholder="tu@correo.com">
                 </div>
 
@@ -34,15 +33,22 @@
                 <button type="submit" class="login-button" style="background-color: #28a745;">Activar Cuenta</button>
             </form>
             
-            <a href="/frontend/registro.html" class="back-to-home">Volver al registro</a>
+            <a href="login.html" class="back-to-home">Ir al Login</a>
         </div>
     </div>
 
     <script>
-        // Truco: Intentar rellenar el correo automáticamente si venimos del registro
-        // (Esto requiere que guardemos el correo en localStorage en index.html, 
-        // pero por ahora el usuario lo puede escribir).
-        
+        // 1. AUTO-RELLENAR CORREO
+        // Detecta si venimos del registro con el correo en la URL (?correo=...)
+        document.addEventListener("DOMContentLoaded", () => {
+            const params = new URLSearchParams(window.location.search);
+            const correoUrl = params.get("correo");
+            if (correoUrl) {
+                document.getElementById("correo").value = correoUrl;
+            }
+        });
+
+        // 2. LÓGICA DE VERIFICACIÓN
         document.getElementById('form-verificacion').addEventListener('submit', async (e) => {
             e.preventDefault();
 
@@ -61,9 +67,9 @@
                 const resultado = await respuesta.json();
 
                 if (respuesta.ok) {
-                    alert("✨ " + resultado.mensaje);
-                    // Aquí redirigiríamos al LOGIN (cuando lo hagamos)
-                    window.location.href = "index.html";
+                    alert("✨ Cuenta verificada correctamente.");
+                    // IMPORTANTE: Al Login para que detecte el rol (Trabajador o Cliente)
+                    window.location.href = "login.html";
                 } else {
                     alert("Error: " + resultado.detail);
                 }

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Panel - Servicios del Hogar</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- Reusamos estilos de login para consistencia -->
+    <link rel="stylesheet" href="css/principal.css">
+    <style>
+        /* Estilos Dashboard */
+        body { background-color: #f4f6f8; align-items: flex-start; }
+        
+        header {
+            background: white; padding: 15px 5%; display: flex; justify-content: space-between; 
+            align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); width: 100%;
+            position: sticky; top: 0; z-index: 100;
+        }
+        
+        .container-dashboard { max-width: 1000px; margin: 40px auto; padding: 0 20px; width: 100%; }
+
+        .dashboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .dashboard-header h1 { color: #333; font-size: 24px; }
+
+        .btn-accion {
+            background-color: #0b69ff; color: white; padding: 10px 20px; border-radius: 5px;
+            text-decoration: none; font-weight: bold; display: inline-flex; align-items: center; gap: 8px;
+            transition: 0.2s; border: none; cursor: pointer;
+        }
+        .btn-accion:hover { background-color: #0056d6; transform: translateY(-2px); }
+        
+        .btn-logout {
+            border: 1px solid #dc3545; color: #dc3545; background: white; padding: 5px 15px;
+            border-radius: 20px; cursor: pointer; font-weight: bold; transition: 0.2s;
+        }
+        .btn-logout:hover { background: #dc3545; color: white; }
+
+        /* Grid */
+        .grid-servicios { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+
+        /* Tarjeta Servicio */
+        .servicio-card {
+            background: white; border-radius: 10px; padding: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-left: 5px solid #ccc;
+            transition: 0.2s; position: relative;
+        }
+        .servicio-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+
+        .borde-SOLICITADO { border-left-color: #ffc107; }
+        .borde-ACEPTADO, .borde-EN_PROCESO { border-left-color: #28a745; }
+        .borde-TERMINADO { border-left-color: #17a2b8; }
+
+        .card-header { display: flex; justify-content: space-between; margin-bottom: 10px; }
+        .card-tag { background: #f0f2f5; color: #555; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
+        .precio { font-weight: bold; color: #28a745; font-size: 16px; }
+        
+        .card-title { font-size: 18px; font-weight: bold; color: #333; margin: 0 0 5px; }
+        .card-desc { font-size: 14px; color: #666; margin-bottom: 15px; line-height: 1.4; }
+        .card-meta { display: flex; justify-content: space-between; font-size: 13px; color: #888; border-top: 1px solid #eee; padding-top: 10px; }
+
+        /* Propuestas Section */
+        .propuestas-container {
+            margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ddd;
+            display: none; background: #f8f9fa; padding: 10px; border-radius: 8px;
+        }
+        .propuesta-item {
+            background: white; padding: 10px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #eee;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .worker-mini { display: flex; align-items: center; gap: 10px; }
+        .worker-mini img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
+        .btn-aceptar { background: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 12px; }
+        
+        /* Botones pequeños */
+        .btn-ver { background: #6f42c1; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .btn-finalizar { background: #17a2b8; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo" style="font-weight: bold; color: #0b69ff; font-size: 22px; cursor:pointer;" onclick="window.location.href='principal.html'">
+            <i class="fas fa-home"></i> ServiciosApp
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <span id="user-name" style="color: #555; font-weight: 500;">Cargando...</span>
+            <button id="btn-mi-perfil" class="btn-accion" style="background: #6c757d; padding: 5px 15px; font-size: 14px;">
+                <i class="fas fa-user"></i> Perfil
+            </button>
+            <button onclick="cerrarSesion()" class="btn-logout"><i class="fas fa-sign-out-alt"></i></button>
+        </div>
+    </header>
+
+    <div class="container-dashboard">
+        <div class="dashboard-header">
+            <h1 id="titulo-dashboard">Mis Actividades</h1>
+            <a id="btn-principal-accion" href="#" class="btn-accion"><i class="fas fa-plus"></i> Acción</a>
+        </div>
+
+        <div id="lista-servicios" class="grid-servicios">
+            <p>Cargando información...</p>
+        </div>
+    </div>
+
+    <script>
+        const usuarioId = localStorage.getItem("usuario_id");
+        const usuarioNombre = localStorage.getItem("usuario_nombre");
+        const esTrabajador = localStorage.getItem("es_trabajador") === "true"; 
+
+        if (!usuarioId) window.location.href = "login.html";
+
+        document.getElementById('user-name').innerText = "Hola, " + (usuarioNombre ? usuarioNombre.split(" ")[0] : "Usuario");
+        
+        const btnPerfil = document.getElementById('btn-mi-perfil');
+        btnPerfil.onclick = () => {
+            window.location.href = esTrabajador ? "perfil_trabajador.html" : "perfil_cliente.html";
+        };
+
+        const titulo = document.getElementById('titulo-dashboard');
+        const btnAccion = document.getElementById('btn-principal-accion');
+        const contenedor = document.getElementById('lista-servicios');
+
+        async function cargarDashboard() {
+            let url = "";
+            
+            if (esTrabajador) {
+                titulo.innerText = "Mis Trabajos Activos";
+                btnAccion.innerHTML = `<i class="fas fa-search"></i> Buscar Nuevos Trabajos`;
+                btnAccion.href = "ver_trabajos.html"; 
+                btnAccion.style.background = "#28a745";
+                // Endpoint para ver trabajos aceptados por mí
+                url = `http://localhost:8080/trabajador/mis-trabajos/${usuarioId}`;
+            } else {
+                titulo.innerText = "Mis Solicitudes";
+                btnAccion.innerHTML = `<i class="fas fa-paper-plane"></i> Pedir Nuevo Servicio`;
+                btnAccion.href = "solicitar.html";
+                url = `http://localhost:8080/servicios/${usuarioId}`;
+            }
+
+            try {
+                const res = await fetch(url);
+                const datos = await res.json();
+                
+                contenedor.innerHTML = ""; 
+
+                if (datos.length === 0) {
+                    contenedor.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:40px; background:white; border-radius:10px;">
+                        <i class="fas fa-inbox" style="font-size:40px; color:#ccc;"></i><p>No hay actividad aún.</p>
+                    </div>`;
+                    return;
+                }
+
+                datos.forEach(s => {
+                    const fechaObj = new Date(s.fecha_programada || s.fecha_solicitud);
+                    const fecha = fechaObj.toLocaleDateString() + " " + fechaObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    const precio = s.precio_estimado > 0 ? `$${s.precio_estimado}` : "A convenir";
+                    const estado = s.estado || "DISPONIBLE"; 
+
+                    const subtitulo = esTrabajador 
+                        ? `<i class="fas fa-user"></i> Cliente: ${s.cliente_nombre || 'Usuario'}`
+                        : `<i class="fas fa-tag"></i> Categoría: ${s.categoria}`;
+
+                    let accionesHTML = "";
+                    if (!esTrabajador) {
+                        if (s.estado === 'SOLICITADO') {
+                            const num = s.num_propuestas || 0;
+                            accionesHTML = num > 0 
+                                ? `<button onclick="verPropuestas('${s.id}')" class="btn-ver">Ver ${num} Propuestas</button>`
+                                : `<small style="color:#777">Esperando postulaciones...</small>`;
+                        } else if (s.estado === 'ACEPTADO' || s.estado === 'EN_PROCESO') {
+                            accionesHTML = `<button onclick="finalizarServicio('${s.id}')" class="btn-finalizar">✅ Finalizar y Calificar</button>`;
+                        } else {
+                            accionesHTML = `<small style="color:green">Calificado: ${s.calificacion} ⭐</small>`;
+                        }
+                    } else {
+                        accionesHTML = `<small style="color:#555">Estado: ${s.estado}</small>`;
+                    }
+
+                    const html = `
+                        <div class="servicio-card borde-${s.estado}">
+                            <div class="card-header">
+                                <span class="card-tag">${s.categoria || 'Servicio'}</span>
+                                <span class="precio">${precio}</span>
+                            </div>
+                            <h3 class="card-title">${s.titulo}</h3>
+                            <p class="card-desc">${s.descripcion}</p>
+                            <div style="margin-bottom: 10px; font-size: 13px; color: #555;">${subtitulo}</div>
+                            <div class="card-meta">
+                                <span><i class="far fa-calendar"></i> ${fecha}</span>
+                                <span>${s.estado}</span>
+                            </div>
+                            <div style="margin-top:15px; display:flex; justify-content:space-between; align-items:center;">${accionesHTML}</div>
+                            <div id="propuestas-${s.id}" class="propuestas-container"></div>
+                        </div>
+                    `;
+                    contenedor.innerHTML += html;
+                });
+
+            } catch (error) {
+                console.error(error);
+                contenedor.innerHTML = "<p style='color:red'>Error al cargar los datos.</p>";
+            }
+        }
+
+        async function verPropuestas(id) {
+            const div = document.getElementById(`propuestas-${id}`);
+            if (div.style.display === 'block') { div.style.display = 'none'; return; }
+            div.style.display = 'block'; div.innerHTML = "Cargando...";
+
+            try {
+                const res = await fetch(`http://localhost:8080/servicios/${id}/propuestas`);
+                const props = await res.json();
+                div.innerHTML = "";
+                if(props.length === 0) { div.innerHTML = "No hay propuestas."; return; }
+
+                props.forEach(p => {
+                    div.innerHTML += `
+                        <div class="propuesta-item">
+                            <div class="worker-mini">
+                                <img src="${p.foto_perfil_url || 'https://via.placeholder.com/40'}" onerror="this.src='https://via.placeholder.com/40'">
+                                <div>
+                                    <div style="font-weight:bold; font-size:14px;">${p.nombre}</div>
+                                    <div style="font-size:12px; color:#28a745;">$${p.precio_oferta}</div>
+                                </div>
+                            </div>
+                            <button class="btn-aceptar" onclick="aceptarPropuesta('${id}', '${p.trabajador_id}', '${p.id}')">Aceptar</button>
+                        </div>
+                        <div style="font-size:12px; color:#666; margin-bottom:10px;">"${p.mensaje}"</div>
+                    `;
+                });
+            } catch(e) { div.innerHTML = "Error al cargar."; }
+        }
+
+        async function aceptarPropuesta(servicioId, trabajadorId, propuestaId) {
+            const result = await Swal.fire({
+                title: '¿Contratar?', text: "El servicio pasará a ACEPTADO.", icon: 'question', showCancelButton: true, confirmButtonText: 'Sí'
+            });
+            if (result.isConfirmed) {
+                try {
+                    const res = await fetch(`http://localhost:8080/servicios/contratar`, {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ servicio_id: servicioId, trabajador_id: trabajadorId, propuesta_id: propuestaId })
+                    });
+                    if(res.ok) { Swal.fire("¡Listo!", "Contratado.", "success"); cargarDashboard(); }
+                } catch(e) { console.error(e); }
+            }
+        }
+
+        async function finalizarServicio(id) {
+            const { value: formValues } = await Swal.fire({
+                title: 'Finalizar y Calificar',
+                html: '<p>Calificación (1-5)</p><input id="swal-input1" class="swal2-input" type="number" min="1" max="5" value="5"><input id="swal-input2" class="swal2-input" placeholder="Reseña">',
+                focusConfirm: false,
+                preConfirm: () => { return { calificacion: document.getElementById('swal-input1').value, resena: document.getElementById('swal-input2').value } }
+            });
+            if (formValues) {
+                try {
+                    const res = await fetch(`http://localhost:8080/servicios/finalizar`, {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ servicio_id: id, calificacion: parseInt(formValues.calificacion), resena: formValues.resena })
+                    });
+                    if(res.ok) { Swal.fire("¡Gracias!", "Servicio finalizado.", "success"); cargarDashboard(); }
+                } catch(e) { console.error(e); }
+            }
+        }
+
+        function cerrarSesion() {
+            if(confirm("¿Cerrar sesión?")) { localStorage.clear(); window.location.href = "login.html"; }
+        }
+
+        cargarDashboard();
+    </script>
+</body>
+</html>

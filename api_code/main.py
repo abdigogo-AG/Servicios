@@ -2,22 +2,35 @@ import os
 import logging
 import random
 import string
+import shutil
 import psycopg2
 import psycopg2.extras
 import bcrypt
-from fastapi import FastAPI, HTTPException
+import re
+from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.staticfiles import StaticFiles 
 from contextlib import asynccontextmanager
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
-from datetime import date, datetime, timedelta # <--- ¡AQUÍ ESTABA EL ERROR DEL BLOQUEO!
+from datetime import date, datetime, timedelta
 from fastapi.middleware.cors import CORSMiddleware
 
+# ==========================================
 # 1. CONFIGURACIÓN
+# ==========================================
 log = logging.getLogger("uvicorn")
 POSTGRES_URL = os.environ.get("POSTGRES_URL")
 db_connections = {}
 
-# 2. MODELOS DE DATOS
+UPLOAD_DIR = "uploads"
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
+
+# ==========================================
+# 2. MODELOS DE DATOS (Pydantic)
+# ==========================================
+
+# --- AUTH & REGISTRO ---
 class RegistroCliente(BaseModel):
     nombre: str
     apellidos: str
@@ -57,12 +70,68 @@ class LoginRequest(BaseModel):
     correo: EmailStr
     password: str
 
+# --- PERFILES ---
+class PerfilTrabajadorUpdate(BaseModel):
+    nombre: str
+    apellidos: str
+    telefono: str
+    descripcion_bio: str
+    anios_experiencia: int
+    tarifa_hora: float
+    foto_perfil_url: Optional[str] = None
+    foto_ine_frente_url: Optional[str] = None
+    foto_ine_reverso_url: Optional[str] = None
+    antecedentes_penales_url: Optional[str] = None
+
+class PerfilClienteUpdate(BaseModel):
+    nombre: str
+    apellidos: str
+    telefono: str
+    calle: str
+    colonia: str
+    codigo_postal: str
+    ciudad: str
+    foto_perfil_url: Optional[str] = None
+    password_nuevo: Optional[str] = None
+
+# --- SERVICIOS Y PROPUESTAS ---
+class CrearServicio(BaseModel):
+    cliente_id: str
+    categoria_id: int
+    titulo: str
+    descripcion: str
+    fecha_programada: Optional[datetime] = None
+    precio_estimado: Optional[float] = None
+    direccion_texto: str
+    latitud: float
+    longitud: float
+    foto_evidencia_url: Optional[str] = None
+
+class CrearPropuesta(BaseModel):
+    servicio_id: str
+    trabajador_id: str
+    precio_oferta: float
+    mensaje: str
+
+class AceptarPropuesta(BaseModel):
+    servicio_id: str
+    trabajador_id: str
+    propuesta_id: str
+
+class CalificarServicio(BaseModel):
+    servicio_id: str
+    calificacion: int # 1 a 5
+    resena: str
+
+# --- ADMIN ---
 class AccionAdmin(BaseModel):
     usuario_id: str
-    accion: str # 'validar', 'bloquear', 'desbloquear', 'borrar'
+    accion: str
     dias_bloqueo: Optional[int] = 0
 
+# ==========================================
 # 3. HELPERS
+# ==========================================
 def encriptar_password(password_plana: str) -> str:
     password_bytes = password_plana[:72].encode('utf-8')
     salt = bcrypt.gensalt()
@@ -77,61 +146,78 @@ def verificar_password(password_plana: str, password_hash: str) -> bool:
     hash_bytes = password_hash.encode('utf-8')
     return bcrypt.checkpw(password_bytes, hash_bytes)
 
-# 4. LIFESPAN (CREACIÓN DE ADMIN CORRECTA)
+# ==========================================
+# 4. LIFESPAN & APP
+# ==========================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    log.info("Iniciando API...")
+    log.info("🚀 Iniciando API...")
     try:
         pg_conn = psycopg2.connect(POSTGRES_URL, cursor_factory=psycopg2.extras.DictCursor)
         db_connections["pg_conn"] = pg_conn
         
-        # --- CREAR ADMIN AL INICIAR (ESTA VEZ BIEN) ---
+        # Admin por defecto
         with pg_conn.cursor() as cur:
-            # Encriptamos la contraseña CON EL MISMO ALGORITMO que el login
             pass_admin = encriptar_password("admin123")
-            
             cur.execute("""
-                INSERT INTO usuarios (
-                    nombre, apellidos, correo_electronico, password_hash, telefono, 
-                    es_admin, activo, fecha_nacimiento
-                )
-                VALUES (
-                    'Super', 'Admin', 'admin@sistema.com', %s, '0000000000', 
-                    TRUE, TRUE, '2000-01-01'
-                )
+                INSERT INTO usuarios (nombre, apellidos, correo_electronico, password_hash, telefono, es_admin, activo, fecha_nacimiento)
+                VALUES ('Super', 'Admin', 'admin@sistema.com', %s, '000', TRUE, TRUE, '2000-01-01')
                 ON CONFLICT (correo_electronico) DO NOTHING
             """, (pass_admin,))
-            
             pg_conn.commit()
-            log.info("Admin asegurado: admin@sistema.com")
-            
-        log.info("Postgres Conectado.")
-
+        log.info("✅ Postgres Conectado.")
     except Exception as e:
         if 'pg_conn' in locals() and pg_conn: pg_conn.rollback()
-        log.error(f"Error al iniciar Postgres: {e}")
+        log.error(f"❌ Error al iniciar Postgres: {e}")
     yield
     if db_connections.get("pg_conn"):
         db_connections["pg_conn"].close()
 
-# 5. APP
 app = FastAPI(lifespan=lifespan)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-# 6. ENDPOINTS
+# ==========================================
+# 5. ENDPOINTS: GENERAL & AUTH
+# ==========================================
 
 @app.get("/")
 def read_root(): return {"mensaje": "API ISF Funcionando"}
 
+
+# --- UPLOAD CORREGIDO (Sanitizar Nombres) ---
+@app.post("/upload")
+async def subir_imagen(file: UploadFile = File(...)):
+    try:
+        # 1. Limpiar nombre: reemplazar espacios y caracteres raros por guion bajo
+        nombre_limpio = re.sub(r'[^a-zA-Z0-9_.-]', '_', file.filename)
+        
+        # 2. Crear nombre único
+        nombre_archivo = f"{generar_codigo_verificacion()}_{nombre_limpio}"
+        
+        # 3. Guardar
+        ruta_guardado = os.path.join(UPLOAD_DIR, nombre_archivo)
+        with open(ruta_guardado, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        # 4. Devolver URL válida
+        url_publica = f"http://localhost:8080/uploads/{nombre_archivo}"
+        return {"url": url_publica}
+        
+    except Exception as e:
+        log.error(f"Error subiendo: {e}")
+        raise HTTPException(500, "Error subiendo imagen")
+    
+    
+
 @app.get("/categorias")
 def obtener_categorias():
     conn = db_connections.get("pg_conn")
-    if conn is None: raise HTTPException(503, "Sin BD")
     try:
         with conn.cursor() as cursor:
             cursor.execute("SELECT id, nombre, icono_url FROM categorias_oficios")
             return [dict(cat) for cat in cursor.fetchall()]
-    except Exception as e: raise HTTPException(500, "Error interno")
+    except Exception: raise HTTPException(500, "Error")
 
 @app.post("/registro-cliente")
 def registrar_cliente(datos: RegistroCliente):
@@ -141,16 +227,14 @@ def registrar_cliente(datos: RegistroCliente):
         with conn.cursor() as cursor:
             hashed_pass = encriptar_password(datos.password)
             codigo = generar_codigo_verificacion()
-            cursor.execute("INSERT INTO usuarios (nombre, apellidos, correo_electronico, password_hash, telefono, fecha_nacimiento, activo, codigo_verificacion) VALUES (%s, %s, %s, %s, %s, %s, FALSE, %s) RETURNING id", 
-                           (datos.nombre, datos.apellidos, datos.correo_electronico, hashed_pass, datos.telefono, datos.fecha_nacimiento, codigo))
+            cursor.execute("INSERT INTO usuarios (nombre, apellidos, correo_electronico, password_hash, telefono, fecha_nacimiento, activo, codigo_verificacion) VALUES (%s, %s, %s, %s, %s, %s, FALSE, %s) RETURNING id", (datos.nombre, datos.apellidos, datos.correo_electronico, hashed_pass, datos.telefono, datos.fecha_nacimiento, codigo))
             nuevo_id = cursor.fetchone()['id']
-            cursor.execute("INSERT INTO detalles_cliente (usuario_id, calle, colonia, numero_exterior, numero_interior, codigo_postal, ciudad, referencias_domicilio, latitud, longitud) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", 
-                           (nuevo_id, datos.calle, datos.colonia, datos.numero_exterior, datos.numero_interior, datos.codigo_postal, datos.ciudad, datos.referencias, datos.latitud, datos.longitud))
+            cursor.execute("INSERT INTO detalles_cliente (usuario_id, calle, colonia, numero_exterior, numero_interior, codigo_postal, ciudad, referencias_domicilio, latitud, longitud) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (nuevo_id, datos.calle, datos.colonia, datos.numero_exterior, datos.numero_interior, datos.codigo_postal, datos.ciudad, datos.referencias, datos.latitud, datos.longitud))
             conn.commit()
-            print(f"\n=== CLIENTE: {datos.correo_electronico} | LLAVE: {codigo} ===\n")
+            print(f"\n=== 📧 CLIENTE: {datos.correo_electronico} | 🔑: {codigo} ===\n")
             return {"mensaje": "Cliente registrado.", "correo": datos.correo_electronico}
     except psycopg2.IntegrityError: conn.rollback(); raise HTTPException(400, "Correo ya registrado.")
-    except Exception as e: conn.rollback(); raise HTTPException(500, f"Error: {str(e)}")
+    except Exception as e: conn.rollback(); log.error(e); raise HTTPException(500, f"Error: {str(e)}")
 
 @app.post("/registro-trabajador")
 def registrar_trabajador(datos: RegistroTrabajador):
@@ -160,119 +244,286 @@ def registrar_trabajador(datos: RegistroTrabajador):
         with conn.cursor() as cursor:
             hashed_pass = encriptar_password(datos.password)
             codigo = generar_codigo_verificacion()
-            cursor.execute("INSERT INTO usuarios (nombre, apellidos, correo_electronico, password_hash, telefono, fecha_nacimiento, activo, codigo_verificacion) VALUES (%s, %s, %s, %s, %s, %s, FALSE, %s) RETURNING id", 
-                           (datos.nombre, datos.apellidos, datos.correo_electronico, hashed_pass, datos.telefono, datos.fecha_nacimiento, codigo))
+            cursor.execute("INSERT INTO usuarios (nombre, apellidos, correo_electronico, password_hash, telefono, fecha_nacimiento, activo, codigo_verificacion) VALUES (%s, %s, %s, %s, %s, %s, FALSE, %s) RETURNING id", (datos.nombre, datos.apellidos, datos.correo_electronico, hashed_pass, datos.telefono, datos.fecha_nacimiento, codigo))
             nuevo_id = cursor.fetchone()['id']
-            cursor.execute("INSERT INTO detalles_trabajador (usuario_id, descripcion_bio, anios_experiencia, tarifa_hora_estimada, latitud, longitud) VALUES (%s, %s, %s, %s, %s, %s)", 
-                           (nuevo_id, datos.descripcion_bio, datos.anios_experiencia, datos.tarifa_hora, datos.latitud, datos.longitud))
+            cursor.execute("INSERT INTO detalles_trabajador (usuario_id, descripcion_bio, anios_experiencia, tarifa_hora_estimada, latitud, longitud) VALUES (%s, %s, %s, %s, %s, %s)", (nuevo_id, datos.descripcion_bio, datos.anios_experiencia, datos.tarifa_hora, datos.latitud, datos.longitud))
             if datos.oficios_ids:
                 for oficio_id in datos.oficios_ids:
                     cursor.execute("INSERT INTO trabajador_oficios (usuario_id, categoria_id) VALUES (%s, %s)", (nuevo_id, oficio_id))
             conn.commit()
-            print(f"\n=== TRABAJADOR: {datos.correo_electronico} | LLAVE: {codigo} ===\n")
+            print(f"\n=== 📧 TRABAJADOR: {datos.correo_electronico} | 🔑: {codigo} ===\n")
             return {"mensaje": "Trabajador registrado.", "correo": datos.correo_electronico}
-    except psycopg2.IntegrityError as e: conn.rollback(); raise HTTPException(400, "Error registro.")
-    except Exception as e: conn.rollback(); raise HTTPException(500, f"Error interno: {str(e)}")
+    except psycopg2.IntegrityError: conn.rollback(); raise HTTPException(400, "Correo ya registrado.")
+    except Exception as e: conn.rollback(); log.error(e); raise HTTPException(500, f"Error interno")
 
 @app.post("/verificar-cuenta")
 def verificar_cuenta(datos: DatosVerificacion):
     conn = db_connections.get("pg_conn")
-    if conn is None: raise HTTPException(503, "Sin BD")
     try:
         with conn.cursor() as cursor:
             cursor.execute("SELECT id, codigo_verificacion, activo FROM usuarios WHERE correo_electronico = %s", (datos.correo,))
-            usuario = cursor.fetchone()
-            if not usuario: raise HTTPException(404, "Usuario no encontrado.")
-            if usuario['activo']: return {"mensaje": "Cuenta ya activa."}
-            if usuario['codigo_verificacion'] == datos.codigo:
-                cursor.execute("UPDATE usuarios SET activo = TRUE WHERE id = %s", (usuario['id'],))
+            u = cursor.fetchone()
+            if not u: raise HTTPException(404, "Usuario no encontrado.")
+            if u['activo']: return {"mensaje": "Cuenta ya activa."}
+            if u['codigo_verificacion'] == datos.codigo:
+                cursor.execute("UPDATE usuarios SET activo = TRUE WHERE id = %s", (u['id'],))
                 conn.commit()
                 return {"mensaje": "¡Cuenta activada!"}
             else: raise HTTPException(400, "Código incorrecto.")
-    except Exception as e: conn.rollback(); raise HTTPException(500, "Error interno.")
+    except Exception as e: conn.rollback(); log.error(e); raise HTTPException(500, "Error interno.")
 
 @app.post("/login")
 def login(datos: LoginRequest):
     conn = db_connections.get("pg_conn")
-    if conn is None: raise HTTPException(503, "Sin BD")
     try:
         with conn.cursor() as cursor:
             cursor.execute("SELECT id, nombre, password_hash, activo, es_admin, bloqueado_hasta FROM usuarios WHERE correo_electronico = %s", (datos.correo,))
-            usuario = cursor.fetchone()
-
-            if not usuario: raise HTTPException(401, "Credenciales incorrectas")
+            u = cursor.fetchone()
+            if not u or not u['activo'] or not verificar_password(datos.password, u['password_hash']): 
+                raise HTTPException(401, "Credenciales incorrectas o inactiva.")
             
-            if not verificar_password(datos.password, usuario['password_hash']): 
-                raise HTTPException(401, "Credenciales incorrectas")
-
-            if not usuario['activo']: raise HTTPException(403, "Tu cuenta no ha sido activada.")
+            if u['bloqueado_hasta']:
+                bloqueo = u['bloqueado_hasta'].replace(tzinfo=None) if u['bloqueado_hasta'].tzinfo else u['bloqueado_hasta']
+                if bloqueo > datetime.now(): raise HTTPException(403, "Cuenta bloqueada.")
             
-            # Validar Bloqueo
-            if usuario['bloqueado_hasta']:
-                if usuario['bloqueado_hasta'] > datetime.now(usuario['bloqueado_hasta'].tzinfo):
-                    raise HTTPException(403, "Tu cuenta está bloqueada temporalmente.")
+            es_trabajador = False
+            cursor.execute("SELECT 1 FROM detalles_trabajador WHERE usuario_id = %s", (u['id'],))
+            if cursor.fetchone(): es_trabajador = True
 
-            return {
-                "mensaje": "Login exitoso",
-                "usuario": {
-                    "id": str(usuario['id']),
-                    "nombre": usuario['nombre'],
-                    "es_admin": usuario['es_admin']
-                }
-            }
+            return {"mensaje": "Login exitoso", "usuario": {"id": str(u['id']), "nombre": u['nombre'], "es_admin": u['es_admin'], "es_trabajador": es_trabajador}}
+    except Exception as e: log.error(e); raise HTTPException(500, "Error interno")
+
+# ==========================================
+# 6. ENDPOINTS: PERFILES
+# ==========================================
+
+@app.get("/mi-perfil/{usuario_id}")
+def obtener_perfil_trabajador(usuario_id: str):
+    conn = db_connections.get("pg_conn")
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT u.nombre, u.apellidos, u.telefono, u.foto_perfil_url,
+                       dt.descripcion_bio, dt.anios_experiencia, dt.tarifa_hora_estimada, dt.validado_por_admin
+                FROM usuarios u
+                JOIN detalles_trabajador dt ON u.id = dt.usuario_id
+                WHERE u.id = %s
+            """, (usuario_id,))
+            perfil = cursor.fetchone()
+            if not perfil: raise HTTPException(404, "Perfil no encontrado")
+            return dict(perfil)
+    except Exception as e: log.error(e); raise HTTPException(500, "Error interno")
+
+@app.put("/mi-perfil/{usuario_id}")
+def actualizar_perfil_trabajador(usuario_id: str, datos: PerfilTrabajadorUpdate):
+    conn = db_connections.get("pg_conn")
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("UPDATE usuarios SET nombre=%s, apellidos=%s, telefono=%s, foto_perfil_url=%s WHERE id=%s", (datos.nombre, datos.apellidos, datos.telefono, datos.foto_perfil_url, usuario_id))
+            cursor.execute("UPDATE detalles_trabajador SET descripcion_bio=%s, anios_experiencia=%s, tarifa_hora_estimada=%s, foto_ine_frente_url=%s, foto_ine_reverso_url=%s, antecedentes_penales_url=%s WHERE usuario_id=%s", (datos.descripcion_bio, datos.anios_experiencia, datos.tarifa_hora, datos.foto_ine_frente_url, datos.foto_ine_reverso_url, datos.antecedentes_penales_url, usuario_id))
+            conn.commit()
+            return {"mensaje": "Perfil actualizado"}
+    except Exception as e: conn.rollback(); log.error(e); raise HTTPException(500, "Error actualizar")
+
+@app.get("/mi-perfil-cliente/{usuario_id}")
+def get_perfil_cliente(usuario_id: str):
+    conn = db_connections.get("pg_conn")
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT u.nombre, u.apellidos, u.telefono, u.correo_electronico, u.foto_perfil_url, u.fecha_nacimiento,
+                       dc.calle, dc.colonia, dc.codigo_postal, dc.ciudad, 
+                       dc.numero_exterior, dc.numero_interior, dc.referencias_domicilio,
+                       dc.latitud, dc.longitud
+                FROM usuarios u
+                JOIN detalles_cliente dc ON u.id = dc.usuario_id
+                WHERE u.id = %s
+            """, (usuario_id,))
+            p = cur.fetchone()
+            if not p: raise HTTPException(404, "Perfil no encontrado")
+            return dict(p)
+    except Exception as e: log.error(e); raise HTTPException(500, "Error")
+
+@app.put("/mi-perfil-cliente/{usuario_id}")
+def update_perfil_cliente(usuario_id: str, d: PerfilClienteUpdate):
+    conn = db_connections.get("pg_conn")
+    try:
+        with conn.cursor() as cur:
+            if d.password_nuevo:
+                h = encriptar_password(d.password_nuevo)
+                cur.execute("UPDATE usuarios SET nombre=%s, apellidos=%s, telefono=%s, correo_electronico=%s, foto_perfil_url=%s, password_hash=%s WHERE id=%s", (d.nombre, d.apellidos, d.telefono, d.correo_electronico, d.foto_perfil_url, h, usuario_id))
+            else:
+                cur.execute("UPDATE usuarios SET nombre=%s, apellidos=%s, telefono=%s, correo_electronico=%s, foto_perfil_url=%s WHERE id=%s", (d.nombre, d.apellidos, d.telefono, d.correo_electronico, d.foto_perfil_url, usuario_id))
+
+            cur.execute("""
+                UPDATE detalles_cliente 
+                SET calle=%s, colonia=%s, codigo_postal=%s, ciudad=%s, numero_exterior=%s, numero_interior=%s, referencias_domicilio=%s, latitud=%s, longitud=%s
+                WHERE usuario_id=%s
+            """, (d.calle, d.colonia, d.codigo_postal, d.ciudad, d.numero_exterior, d.numero_interior, d.referencias, d.latitud, d.longitud, usuario_id))
+            conn.commit()
+            return {"mensaje": "Perfil actualizado"}
+    except Exception as e: conn.rollback(); log.error(e); raise HTTPException(500, "Error update")
+
+# ==========================================
+# 7. ENDPOINTS: SERVICIOS Y PROPUESTAS
+# ==========================================
+
+@app.post("/servicios")
+def crear_servicio(datos: CrearServicio):
+    conn = db_connections.get("pg_conn")
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO servicios (cliente_id, categoria_id, titulo, descripcion, fecha_programada, precio_estimado, direccion_texto, latitud, longitud, foto_evidencia_url)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+            """, (datos.cliente_id, datos.categoria_id, datos.titulo, datos.descripcion, datos.fecha_programada, datos.precio_estimado, datos.direccion_texto, datos.latitud, datos.longitud, datos.foto_evidencia_url))
+            nid = cursor.fetchone()['id']
+            conn.commit()
+            return {"mensaje": "Solicitud creada", "servicio_id": str(nid)}
+    except Exception as e: conn.rollback(); log.error(e); raise HTTPException(500, "Error crear servicio")
+
+@app.get("/servicios/{usuario_id}")
+def listar_servicios_cliente(usuario_id: str):
+    conn = db_connections.get("pg_conn")
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT s.id, s.titulo, s.estado, s.fecha_solicitud, c.nombre as categoria,
+                       (SELECT COUNT(*) FROM propuestas p WHERE p.servicio_id = s.id) as num_propuestas
+                FROM servicios s
+                JOIN categorias_oficios c ON s.categoria_id = c.id
+                WHERE s.cliente_id = %s
+                ORDER BY s.fecha_solicitud DESC
+            """, (usuario_id,))
+            res = []
+            for s in cur.fetchall():
+                d = dict(s)
+                d['id'] = str(d['id'])
+                d['fecha_solicitud'] = str(d['fecha_solicitud'])
+                res.append(d)
+            return res
+    except Exception as e: log.error(e); raise HTTPException(500, "Error servicios")
+
+@app.get("/feed-servicios")
+def feed_servicios():
+    conn = db_connections.get("pg_conn")
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT s.id, s.titulo, s.descripcion, s.precio_estimado, s.fecha_programada, s.direccion_texto, s.foto_evidencia_url,
+                       c.nombre as categoria, u.nombre as cliente_nombre
+                FROM servicios s
+                JOIN categorias_oficios c ON s.categoria_id = c.id
+                JOIN usuarios u ON s.cliente_id = u.id
+                WHERE s.estado = 'SOLICITADO'
+                ORDER BY s.fecha_solicitud DESC LIMIT 20
+            """)
+            servicios = cursor.fetchall()
+            res = []
+            for s in servicios:
+                d = dict(s)
+                d['id'] = str(d['id'])
+                d['fecha_programada'] = str(d['fecha_programada'])
+                res.append(d)
+            return res
+    except Exception as e: log.error(e); raise HTTPException(500, "Error feed")
+
+@app.post("/propuestas")
+def crear_propuesta(datos: CrearPropuesta):
+    conn = db_connections.get("pg_conn")
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT 1 FROM propuestas WHERE servicio_id = %s AND trabajador_id = %s", (datos.servicio_id, datos.trabajador_id))
+            if cursor.fetchone(): raise HTTPException(400, "Ya te has postulado.")
+            cursor.execute("INSERT INTO propuestas (servicio_id, trabajador_id, precio_oferta, mensaje) VALUES (%s, %s, %s, %s)", (datos.servicio_id, datos.trabajador_id, datos.precio_oferta, datos.mensaje))
+            conn.commit()
+            return {"mensaje": "Propuesta enviada"}
     except HTTPException as e: raise e
-    except Exception as e:
-        log.error(f"Error Login: {e}")
-        raise HTTPException(500, "Error interno")
+    except Exception as e: conn.rollback(); log.error(e); raise HTTPException(500, "Error propuesta")
 
-# --- ENDPOINTS ADMIN ---
+@app.get("/servicios/{servicio_id}/propuestas")
+def ver_propuestas(servicio_id: str):
+    conn = db_connections.get("pg_conn")
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT p.id, p.precio_oferta, p.mensaje, p.trabajador_id,
+                       u.nombre, u.telefono, u.foto_perfil_url, dt.calificacion_promedio
+                FROM propuestas p
+                JOIN usuarios u ON p.trabajador_id = u.id
+                JOIN detalles_trabajador dt ON u.id = dt.usuario_id
+                WHERE p.servicio_id = %s ORDER BY p.precio_oferta ASC
+            """, (servicio_id,))
+            return [dict(p, id=str(p['id']), trabajador_id=str(p['trabajador_id'])) for p in cur.fetchall()]
+    except Exception as e: log.error(e); raise HTTPException(500, "Error propuestas")
+
+@app.post("/servicios/contratar")
+def contratar_trabajador(datos: AceptarPropuesta):
+    conn = db_connections.get("pg_conn")
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("UPDATE servicios SET trabajador_id = %s, estado = 'EN_PROCESO', precio_estimado = (SELECT precio_oferta FROM propuestas WHERE id = %s) WHERE id = %s", (datos.trabajador_id, datos.propuesta_id, datos.servicio_id))
+            cursor.execute("UPDATE propuestas SET aceptada = TRUE WHERE id = %s", (datos.propuesta_id,))
+            conn.commit()
+            return {"mensaje": "¡Contratado!"}
+    except Exception as e: conn.rollback(); log.error(e); raise HTTPException(500, "Error contratar")
+
+@app.get("/trabajador/mis-trabajos/{trabajador_id}")
+def mis_trabajos_trabajador(trabajador_id: str):
+    conn = db_connections.get("pg_conn")
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT s.id, s.titulo, s.descripcion, s.estado, s.fecha_solicitud, s.direccion_texto, 
+                       s.precio_estimado, u.nombre as cliente_nombre, u.telefono as cliente_telefono
+                FROM servicios s
+                JOIN usuarios u ON s.cliente_id = u.id
+                WHERE s.trabajador_id = %s
+                ORDER BY s.fecha_solicitud DESC
+            """, (trabajador_id,))
+            return [dict(s, id=str(s['id']), fecha_solicitud=str(s['fecha_solicitud'])) for s in cursor.fetchall()]
+    except Exception as e: log.error(e); raise HTTPException(500, "Error")
+
+@app.post("/servicios/finalizar")
+def finalizar_servicio(datos: CalificarServicio):
+    conn = db_connections.get("pg_conn")
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("UPDATE servicios SET estado = 'TERMINADO', calificacion = %s, resena = %s WHERE id = %s RETURNING trabajador_id", (datos.calificacion, datos.resena, datos.servicio_id))
+            res = cursor.fetchone()
+            if not res: raise HTTPException(404, "Servicio no encontrado")
+            tid = res['trabajador_id']
+            cursor.execute("SELECT AVG(calificacion) as pro, COUNT(*) as tot FROM servicios WHERE trabajador_id = %s AND calificacion IS NOT NULL", (tid,))
+            stats = cursor.fetchone()
+            cursor.execute("UPDATE detalles_trabajador SET calificacion_promedio = %s, total_evaluaciones = %s WHERE usuario_id = %s", (float(stats['pro'] or 0), int(stats['tot']), tid))
+            conn.commit()
+            return {"mensaje": "Finalizado y calificado"}
+    except Exception as e: conn.rollback(); log.error(e); raise HTTPException(500, "Error finalizar")
+
+# ==========================================
+# 8. ADMIN
+# ==========================================
 @app.get("/admin/usuarios")
 def admin_listar_usuarios():
     conn = db_connections.get("pg_conn")
     try:
         with conn.cursor() as cursor:
-            cursor.execute("""
-                SELECT u.id, u.nombre, u.apellidos, u.correo_electronico, u.activo, u.bloqueado_hasta,
-                CASE WHEN dt.usuario_id IS NOT NULL THEN 'Trabajador' WHEN dc.usuario_id IS NOT NULL THEN 'Cliente' WHEN u.es_admin THEN 'Admin' ELSE 'Desconocido' END as rol,
-                dt.validado_por_admin
-                FROM usuarios u
-                LEFT JOIN detalles_trabajador dt ON u.id = dt.usuario_id
-                LEFT JOIN detalles_cliente dc ON u.id = dc.usuario_id
-                ORDER BY u.fecha_registro DESC
-            """)
-            usuarios = cursor.fetchall()
-            res = []
-            for u in usuarios:
-                d = dict(u)
-                d['id'] = str(d['id'])
-                # Convertir fecha a string para JSON
-                if d['bloqueado_hasta']: d['bloqueado_hasta'] = str(d['bloqueado_hasta'])
-                res.append(d)
-            return res
-    except Exception as e:
-        log.error(f"Error admin: {e}")
-        raise HTTPException(500, "Error listando")
+            cursor.execute("""SELECT u.id, u.nombre, u.apellidos, u.correo_electronico, u.activo, u.bloqueado_hasta, CASE WHEN dt.usuario_id IS NOT NULL THEN 'Trabajador' WHEN dc.usuario_id IS NOT NULL THEN 'Cliente' WHEN u.es_admin THEN 'Admin' ELSE 'Desconocido' END as rol, dt.validado_por_admin FROM usuarios u LEFT JOIN detalles_trabajador dt ON u.id = dt.usuario_id LEFT JOIN detalles_cliente dc ON u.id = dc.usuario_id ORDER BY u.fecha_registro DESC""")
+            return [dict(u, id=str(u['id']), bloqueado_hasta=str(u['bloqueado_hasta']) if u['bloqueado_hasta'] else None) for u in cursor.fetchall()]
+    except Exception as e: log.error(e); raise HTTPException(500, "Error listando")
 
 @app.post("/admin/accion")
 def admin_accion_usuario(datos: AccionAdmin):
     conn = db_connections.get("pg_conn")
     try:
         with conn.cursor() as cursor:
-            if datos.accion == "validar":
-                cursor.execute("UPDATE detalles_trabajador SET validado_por_admin = TRUE WHERE usuario_id = %s", (datos.usuario_id,))
+            if datos.accion == "validar": cursor.execute("UPDATE detalles_trabajador SET validado_por_admin = TRUE WHERE usuario_id = %s", (datos.usuario_id,))
             elif datos.accion == "bloquear":
-                # Ahora sí tenemos datetime y timedelta importados
                 dias = datos.dias_bloqueo if datos.dias_bloqueo else 36500
                 fecha_fin = datetime.now() + timedelta(days=dias)
                 cursor.execute("UPDATE usuarios SET bloqueado_hasta = %s WHERE id = %s", (fecha_fin, datos.usuario_id))
-            elif datos.accion == "desbloquear":
-                cursor.execute("UPDATE usuarios SET bloqueado_hasta = NULL WHERE id = %s", (datos.usuario_id,))
-            elif datos.accion == "borrar":
-                cursor.execute("DELETE FROM usuarios WHERE id = %s", (datos.usuario_id,))
-            
+            elif datos.accion == "desbloquear": cursor.execute("UPDATE usuarios SET bloqueado_hasta = NULL WHERE id = %s", (datos.usuario_id,))
+            elif datos.accion == "borrar": cursor.execute("DELETE FROM usuarios WHERE id = %s", (datos.usuario_id,))
             conn.commit()
             return {"mensaje": f"Acción '{datos.accion}' ejecutada."}
-    except Exception as e:
-        conn.rollback()
-        log.error(f"Error accion: {e}")
-        raise HTTPException(500, f"Error: {str(e)}")
+    except Exception as e: conn.rollback(); log.error(e); raise HTTPException(500, f"Error: {str(e)}")

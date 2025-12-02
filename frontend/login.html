@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Iniciar Sesión</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <link rel="stylesheet" href="/frontend/css/login.css">
+    <link rel="stylesheet" href="css/login.css">
 </head>
 <body>
 
@@ -29,7 +29,7 @@
 
             <div style="margin-top: 20px;">
                 <p style="font-size: 14px; color: #666;">
-                    ¿No tienes cuenta? <a href="/frontend/registro.html" style="color: #0b69ff; text-decoration: none; font-weight: bold;">Regístrate aquí</a>
+                    ¿No tienes cuenta? <a href="registro.html" style="color: #0b69ff; text-decoration: none; font-weight: bold;">Regístrate aquí</a>
                 </p>
             </div>
         </div>
@@ -59,6 +59,8 @@
 
                     localStorage.setItem("usuario_nombre", resultado.usuario.nombre);
                     localStorage.setItem("usuario_id", resultado.usuario.id);
+                    // Guardamos roles para usarlos en principal.html
+                    localStorage.setItem("es_trabajador", resultado.usuario.es_trabajador);
                     localStorage.setItem("es_admin", resultado.usuario.es_admin); 
                     
                     alert("¡Bienvenido " + resultado.usuario.nombre + "!");
@@ -68,12 +70,12 @@
                         // Si es Admin -> Panel Admin
                         window.location.href = "admin.html"; 
                     } else {
-                        // Si es Cliente/Trabajador -> Dashboard
-                        window.location.href = "index.html"; 
+                        // Si es Cliente/Trabajador -> Dashboard Principal
+                        window.location.href = "principalv2.html?rol=trabajador"; 
                     }
                     
                 } else {
-                    alert("Error: " + resultado.detail);
+                    alert("Error: El correo o la contraseña son incorrectas.");
                 }
 
             } catch (error) {
