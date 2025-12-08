@@ -1,5 +1,5 @@
 -- Conectarse a la base de datos
-\c registros;
+-- \c registros;
 
 -- Habilitar extensión para funciones criptográficas (Opcional pero útil)
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -39,7 +39,7 @@ CREATE TABLE usuarios (
     foto_perfil_url TEXT,
     fecha_registro TIMESTAMPTZ DEFAULT NOW(),
     
-    activo BOOLEAN DEFAULT TRUE,
+    activo BOOLEAN DEFAULT FALSE,
     codigo_verificacion VARCHAR(6),
 
     -- SEGURIDAD Y ADMIN

@@ -178,117 +178,34 @@ def verificar_password(password_plana: str, password_hash: str) -> bool:
 # ==========================================
 # 4. LIFESPAN & APP
 # ==========================================
-# ==========================================
-# 4. LIFESPAN (INICIO AUTOMÁTICO DE BD)
-# ==========================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    log.info("🚀 Iniciando API y verificando Base de Datos...")
+    log.info("🚀 Iniciando API...")
     try:
         pg_conn = psycopg2.connect(POSTGRES_URL, cursor_factory=psycopg2.extras.DictCursor)
         db_connections["pg_conn"] = pg_conn
         
+        # Admin por defecto
         with pg_conn.cursor() as cur:
-            # 1. CREAR TABLAS AUTOMÁTICAMENTE (Script a prueba de fallos)
-            sql_inicial = """
-                CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
-                -- Enum seguro (evita error si ya existe)
-                DO $$ BEGIN
-                    CREATE TYPE estado_servicio AS ENUM ('SOLICITADO', 'ACEPTADO', 'EN_PROCESO', 'TERMINADO', 'CANCELADO');
-                EXCEPTION
-                    WHEN duplicate_object THEN null;
-                END $$;
-
-                -- Tablas (IF NOT EXISTS para no borrar datos)
-                CREATE TABLE IF NOT EXISTS categorias_oficios (
-                    id SERIAL PRIMARY KEY,
-                    nombre VARCHAR(50) UNIQUE NOT NULL,
-                    icono_url TEXT 
-                );
-
-                CREATE TABLE IF NOT EXISTS usuarios (
-                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    nombre VARCHAR(100), apellidos VARCHAR(255), correo_electronico VARCHAR(255) UNIQUE, 
-                    password_hash VARCHAR(255), telefono VARCHAR(20), fecha_nacimiento DATE, 
-                    foto_perfil_url TEXT, fecha_registro TIMESTAMPTZ DEFAULT NOW(), 
-                    activo BOOLEAN DEFAULT TRUE, codigo_verificacion VARCHAR(6), 
-                    es_admin BOOLEAN DEFAULT FALSE, bloqueado_hasta TIMESTAMPTZ DEFAULT NULL 
-                );
-
-                CREATE TABLE IF NOT EXISTS detalles_cliente (
-                    usuario_id UUID PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
-                    calle VARCHAR(255), colonia VARCHAR(100), numero_exterior VARCHAR(20), 
-                    numero_interior VARCHAR(20), referencias_domicilio TEXT, codigo_postal VARCHAR(10), 
-                    ciudad VARCHAR(100), latitud DECIMAL(9,6), longitud DECIMAL(9,6), 
-                    id_cliente_pagos VARCHAR(100) 
-                );
-
-                CREATE TABLE IF NOT EXISTS detalles_trabajador (
-                    usuario_id UUID PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
-                    descripcion_bio TEXT, anios_experiencia INT, tarifa_hora_estimada DECIMAL(10,2),
-                    foto_ine_frente_url TEXT, foto_ine_reverso_url TEXT, antecedentes_penales_url TEXT,
-                    validado_por_admin BOOLEAN DEFAULT TRUE, latitud DECIMAL(9,6), longitud DECIMAL(9,6),
-                    radio_cobertura_km INT DEFAULT 10, disponible BOOLEAN DEFAULT TRUE,
-                    calificacion_promedio DECIMAL(3, 2) DEFAULT 0, total_evaluaciones INT DEFAULT 0
-                );
-
-                CREATE TABLE IF NOT EXISTS trabajador_oficios (
-                    usuario_id UUID REFERENCES detalles_trabajador(usuario_id) ON DELETE CASCADE,
-                    categoria_id INT REFERENCES categorias_oficios(id) ON DELETE CASCADE,
-                    PRIMARY KEY (usuario_id, categoria_id)
-                );
-
-                CREATE TABLE IF NOT EXISTS servicios (
-                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    cliente_id UUID REFERENCES detalles_cliente(usuario_id) NOT NULL,
-                    trabajador_id UUID REFERENCES detalles_trabajador(usuario_id),
-                    categoria_id INT REFERENCES categorias_oficios(id),
-                    titulo VARCHAR(150), descripcion TEXT, foto_evidencia_url TEXT,
-                    direccion_texto TEXT, latitud DECIMAL(9,6), longitud DECIMAL(9,6),
-                    fecha_solicitud TIMESTAMPTZ DEFAULT NOW(), fecha_programada TIMESTAMPTZ,
-                    precio_estimado DECIMAL(10,2), calificacion INT, resena TEXT,
-                    estado estado_servicio DEFAULT 'SOLICITADO'
-                );
-
-                CREATE TABLE IF NOT EXISTS propuestas (
-                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    servicio_id UUID REFERENCES servicios(id) ON DELETE CASCADE,
-                    trabajador_id UUID REFERENCES detalles_trabajador(usuario_id) ON DELETE CASCADE,
-                    mensaje TEXT, precio_oferta DECIMAL(10,2), aceptada BOOLEAN DEFAULT FALSE,
-                    fecha_creacion TIMESTAMPTZ DEFAULT NOW()
-                );
-
-                -- Insertar oficios básicos si está vacío
-                INSERT INTO categorias_oficios (nombre, icono_url) VALUES 
-                    ('Plomero', 'fas fa-wrench'), ('Electricista', 'fas fa-bolt'), 
-                    ('Carpintero', 'fas fa-hammer'), ('Jardinero', 'fas fa-leaf'), 
-                    ('Pintor', 'fas fa-paint-roller'), ('Albañil', 'fas fa-trowel'),
-                    ('Limpieza', 'fas fa-broom'), ('Mecánico', 'fas fa-car-wrench')
-                ON CONFLICT DO NOTHING;
-            """
-            cur.execute(sql_inicial)
-            
-            # 2. CREAR ADMIN (Si no existe)
             pass_admin = encriptar_password("admin123")
             cur.execute("""
                 INSERT INTO usuarios (nombre, apellidos, correo_electronico, password_hash, telefono, es_admin, activo, fecha_nacimiento)
                 VALUES ('Super', 'Admin', 'admin@sistema.com', %s, '000', TRUE, TRUE, '2000-01-01')
                 ON CONFLICT (correo_electronico) DO NOTHING
             """, (pass_admin,))
-            
             pg_conn.commit()
-            
-        log.info("✅ Tablas verificadas/creadas correctamente en Postgres.")
-        
+        log.info("✅ Postgres Conectado.")
     except Exception as e:
         if 'pg_conn' in locals() and pg_conn: pg_conn.rollback()
         log.error(f"❌ Error al iniciar Postgres: {e}")
-    
     yield
-    
     if db_connections.get("pg_conn"):
         db_connections["pg_conn"].close()
+
+app = FastAPI(lifespan=lifespan)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
 # ==========================================
 # 5. ENDPOINTS: GENERAL & AUTH
 # ==========================================
