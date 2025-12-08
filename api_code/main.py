@@ -260,7 +260,7 @@ def registrar_cliente(datos: RegistroCliente):
             nuevo_id = cursor.fetchone()['id']
             cursor.execute("INSERT INTO detalles_cliente (usuario_id, calle, colonia, numero_exterior, numero_interior, codigo_postal, ciudad, referencias_domicilio, latitud, longitud) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (nuevo_id, datos.calle, datos.colonia, datos.numero_exterior, datos.numero_interior, datos.codigo_postal, datos.ciudad, datos.referencias, datos.latitud, datos.longitud))
             conn.commit()
-            print(f"\n=== 📧 CLIENTE: {datos.correo_electronico} | 🔑: {codigo} ===\n")
+            print(f"\n===  CLIENTE: {datos.correo_electronico} | : {codigo} ===\n")
             return {"mensaje": "Cliente registrado.", "correo": datos.correo_electronico}
     except psycopg2.IntegrityError: conn.rollback(); raise HTTPException(400, "Correo ya registrado.")
     except Exception as e: conn.rollback(); log.error(e); raise HTTPException(500, f"Error: {str(e)}")
