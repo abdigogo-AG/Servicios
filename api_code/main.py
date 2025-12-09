@@ -303,9 +303,9 @@ def crear_pago(datos: SolicitudPago):
         ],
         # 👇👇👇 REVISA BIEN ESTA PARTE 👇👇👇
         "back_urls": {
-            "success": f"http://127.0.0.1:5502/frontend/pago_exitoso.html?servicio={datos.servicio_id}&trabajador={datos.trabajador_id}&propuesta={datos.propuesta_id}",
-            "failure": "http://127.0.0.1:5502/frontend/dashboard.html",
-            "pending": "http://127.0.0.1:5502/frontend/dashboard.html"
+            "success": f"{FRONTEND_URL}/frontend/pago_exitoso.html?servicio={datos.servicio_id}&trabajador={datos.trabajador_id}&propuesta={datos.propuesta_id}",
+            "failure": f"{FRONTEND_URL}/frontend/dashboard.html?status=fallo",
+            "pending": f"{FRONTEND_URL}/frontend/dashboard.html?status=pendiente"
         },
         "auto_return": "approved"
         # 👆👆👆 FIN DE LA PARTE CRÍTICA 👆👆👆
