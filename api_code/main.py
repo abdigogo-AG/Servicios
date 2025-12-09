@@ -293,8 +293,10 @@ def registrar_trabajador(datos: RegistroTrabajador):
     except psycopg2.IntegrityError: conn.rollback(); raise HTTPException(400, "Correo ya registrado.")
     except Exception as e: conn.rollback(); log.error(e); raise HTTPException(500, f"Error interno")
 
+# ... (El inicio del archivo sigue igual) ...
+
 # --- ENDPOINT PAGO CORREGIDO ---
-@app.post("/pagos/crear-preferencia")
+@app.post("/pagos/crear-preferencia") # <--- 1. CORREGIDO EL NOMBRE
 def crear_preferencia_pago(datos: SolicitudPago):
     if sdk is None:
         raise HTTPException(500, "Error: Mercado Pago no configurado.")
@@ -312,7 +314,7 @@ def crear_preferencia_pago(datos: SolicitudPago):
                 "unit_price": float(datos.precio)
             }
         ],
-        # Redirigimos al Dashboard para confirmar (más seguro que un archivo nuevo por ahora)
+        # 2. CORREGIDO: USAR VARIABLE FRONTEND_URL (No 127.0.0.1 fijo)
         "back_urls": {
             "success": f"{FRONTEND_URL}/frontend/dashboard.html?status=aprobado",
             "failure": f"{FRONTEND_URL}/frontend/dashboard.html?status=fallo",
@@ -323,22 +325,26 @@ def crear_preferencia_pago(datos: SolicitudPago):
     }
 
     try:
-        # 2. Intentar crear la preferencia
+        # 3. Crear la preferencia
         preference_response = sdk.preference().create(preference_data)
         
-        # Logs para depurar en terminal
+        # Logs para ver qué pasa
         print("\n--- RESPUESTA MP ---")
-        # print(preference_response) # Descomenta si quieres ver todo el JSON
         
         if preference_response["status"] == 201:
-            # CORRECCIÓN CLAVE: Devolver 'init_point' que es lo que espera el JS
+            response_data = preference_response["response"]
+            
+            # Usamos sandbox_init_point si existe (para pruebas), si no el normal
+            link_pago = response_data.get("sandbox_init_point", response_data.get("init_point"))
+
+            # 3. CORREGIDO: DEVOLVER 'init_point' (Lo que tu HTML espera)
             return {
-                "preference_id": preference_response["response"]["id"], 
-                "init_point": preference_response["response"]["init_point"]
+                "preference_id": response_data["id"], 
+                "init_point": link_pago 
             }
         else:
             msg = preference_response.get("message", "Error desconocido en MP")
-            print(f"MP Error Datos: {preference_data}") 
+            print(f"MP Error: {preference_data}") 
             raise HTTPException(400, f"MP Error: {msg}")
 
     except Exception as e:
@@ -346,6 +352,7 @@ def crear_preferencia_pago(datos: SolicitudPago):
         print(f"Error interno MP: {e}")
         raise HTTPException(500, "Error procesando el pago.")
 
+# ... (El resto del archivo sigue igual) ...
     
 @app.post("/verificar-cuenta")
 def verificar_cuenta(datos: DatosVerificacion):
