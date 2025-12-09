@@ -158,6 +158,14 @@ class AccionAdmin(BaseModel):
     accion: str
     dias_bloqueo: Optional[int] = 0
 
+    # --- NUEVO MODELO PAGO ---
+class SolicitudPago(BaseModel):
+    titulo: str
+    precio: float
+    servicio_id: str
+    propuesta_id: str
+    trabajador_id: str
+
 # ==========================================
 # 3. HELPERS
 # ==========================================
@@ -285,10 +293,13 @@ def registrar_trabajador(datos: RegistroTrabajador):
     except psycopg2.IntegrityError: conn.rollback(); raise HTTPException(400, "Correo ya registrado.")
     except Exception as e: conn.rollback(); log.error(e); raise HTTPException(500, f"Error interno")
 
-@app.post("/crear-pago")
-def crear_pago(datos: SolicitudPago):
+# --- ENDPOINT PAGO CORREGIDO ---
+@app.post("/pagos/crear-preferencia")
+def crear_preferencia_pago(datos: SolicitudPago):
     if sdk is None:
         raise HTTPException(500, "Error: Mercado Pago no configurado.")
+
+    print(f"💰 Creando preferencia para: {datos.titulo} - ${datos.precio}")
 
     # 1. Configuración de la preferencia
     preference_data = {
@@ -301,37 +312,40 @@ def crear_pago(datos: SolicitudPago):
                 "unit_price": float(datos.precio)
             }
         ],
-        # 👇👇👇 REVISA BIEN ESTA PARTE 👇👇👇
+        # Redirigimos al Dashboard para confirmar (más seguro que un archivo nuevo por ahora)
         "back_urls": {
-            "success": f"{FRONTEND_URL}/frontend/pago_exitoso.html?servicio={datos.servicio_id}&trabajador={datos.trabajador_id}&propuesta={datos.propuesta_id}",
+            "success": f"{FRONTEND_URL}/frontend/dashboard.html?status=aprobado",
             "failure": f"{FRONTEND_URL}/frontend/dashboard.html?status=fallo",
             "pending": f"{FRONTEND_URL}/frontend/dashboard.html?status=pendiente"
         },
-        "auto_return": "approved"
-        # 👆👆👆 FIN DE LA PARTE CRÍTICA 👆👆👆
+        "auto_return": "approved",
+        "external_reference": f"{datos.servicio_id}|{datos.propuesta_id}|{datos.trabajador_id}"
     }
 
     try:
         # 2. Intentar crear la preferencia
         preference_response = sdk.preference().create(preference_data)
         
-        # Logs para depurar
-        print("\n--- RESPUESTA DE MERCADO PAGO ---")
-        print(preference_response)
-        print("---------------------------------\n")
-
+        # Logs para depurar en terminal
+        print("\n--- RESPUESTA MP ---")
+        # print(preference_response) # Descomenta si quieres ver todo el JSON
+        
         if preference_response["status"] == 201:
-            return {"url_pago": preference_response["response"]["init_point"]}
+            # CORRECCIÓN CLAVE: Devolver 'init_point' que es lo que espera el JS
+            return {
+                "preference_id": preference_response["response"]["id"], 
+                "init_point": preference_response["response"]["init_point"]
+            }
         else:
-            msg = preference_response.get("message", "Error desconocido")
-            # Si el error persiste, imprime preference_data para ver qué estamos enviando
-            print(f"Datos enviados: {preference_data}") 
+            msg = preference_response.get("message", "Error desconocido en MP")
+            print(f"MP Error Datos: {preference_data}") 
             raise HTTPException(400, f"MP Error: {msg}")
 
     except Exception as e:
         if isinstance(e, HTTPException): raise e
-        print(f"Error interno: {e}")
+        print(f"Error interno MP: {e}")
         raise HTTPException(500, "Error procesando el pago.")
+
     
 @app.post("/verificar-cuenta")
 def verificar_cuenta(datos: DatosVerificacion):
